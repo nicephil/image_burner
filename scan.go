@@ -4,10 +4,11 @@ import (
         "time"
         "sync"
         "net"
-	"log"
-        "io/ioutil"
-	"os"
 	"bytes"
+        "fmt"
+        "os"
+        "strings"
+        "strconv"
 	"golang.org/x/crypto/ssh"
 )
 
@@ -15,13 +16,6 @@ import (
  * global vars
 */
 var wg sync.WaitGroup       // this to wait all worker before exit
-var (
-    log_dbg     *log.Logger
-    log_info    *log.Logger
-    log_wrn     *log.Logger
-    log_err     *log.Logger
-)
-
 
 type Device struct {
     ipv4    string
@@ -30,9 +24,41 @@ type Device struct {
 
 var dev_list []Device
 
-func main() {
+func dump_dev_list () {
+    var choice string
+    fmt.Println ("Found", len(dev_list), "devices")
+    if len(dev_list) == 0 {
+        os.Exit(0)
+    }
+    for {
+        fmt.Printf("\nPlease choose which to install image(Q to quit):\n")
+        fmt.Printf("[0] All devices\n")
+        for i, d := range dev_list {
+            fmt.Printf("[%d] %s %d\n", i+1, d.ipv4, len(d.buffer))
+            log_dbg.Println (d.ipv4, string(d.buffer))
+        }
+        fmt.Printf("Your choice:")
+        fmt.Scanf("%s\n", &choice)
+        log_dbg.Println ("user input:", choice)
+        if strings.ToUpper(choice) == "Q" {
+            fmt.Printf("Quit\n")
+            os.Exit(0)
+        }
+        c,err := strconv.Atoi(choice)
+        if err != nil {
+            fmt.Printf ("\n[%s] is invalid\n", choice)
+            continue
+        }
+        if c < 0 || c > len(dev_list) {
+            fmt.Printf ("\n[%s] is out-of-range\n", choice)
+            continue
+        }
+        fmt.Printf ("You choose: [%d]\n", c)
+        break
+    }
+}
 
-    init_log ()
+func scan_local_subnet () {
 
     // get all subnet
     nets, selfs, err := get_local_subnets()
@@ -40,43 +66,30 @@ func main() {
         log_err.Fatalln(err)
     }
 
-    // loop each subnet
+    // scan each subnet in batch mode
     for _, net := range nets {
-        log_info.Println ("Scanning subnet", net)
+        fmt.Println ("Scanning subnet", net)
         hosts,err := net2hosts_exclude (net, selfs)
         if err != nil {
             log_err.Println(err)
             continue
         }
         num := len(hosts)
-        log_info.Println ("Trying ", num, "possible hosts")
+        log_dbg.Println ("Trying ", num, "possible hosts")
         if num == 0 {                                    // just be cautious, should not happen
             log_info.Println (net, "has 0 host count?", hosts)
             continue
         }
-        // do all hosts in a subnet in a parallel
+        // do all hosts in one subnet in a parallel
         wg.Add(num)
         for _, h := range hosts {
             go scan_one_host (h)
         }
         wg.Wait()
-        log_info.Println ("Done subnet", net)
-    }
-
-
-    log_info.Println ("Total found host:", len(dev_list))
-    for _, d := range dev_list {
-        log_info.Println (d.ipv4, string(d.buffer))
+        log_dbg.Println ("Done subnet", net)
     }
 }
 
-func init_log() {
-    log_dbg = log.New(ioutil.Discard, "DEBUG: ",    log.Ldate|log.Ltime|log.Lshortfile)
-    //log_dbg = log.New(os.Stdout, "DEBUG: ",    log.Ldate|log.Ltime|log.Lshortfile)
-    log_info = log.New(os.Stdout, "INFO: ",         log.Ldate|log.Ltime|log.Lshortfile)
-    log_wrn = log.New(os.Stdout, "WARNING: ",       log.Ldate|log.Ltime|log.Lshortfile)
-    log_err = log.New(os.Stderr, "ERROR: ",         log.Ldate|log.Ltime|log.Lshortfile)
-}
 
 //  http://play.golang.org/p/m8TNTtygK0
 func inc(ip net.IP) {
