@@ -49,7 +49,7 @@ func main() {
             continue
         }
         num := len(hosts)
-        log_info.Println ("Total ", num, "possible hosts")
+        log_info.Println ("Trying ", num, "possible hosts")
         if num == 0 {                                    // just be cautious, should not happen
             log_info.Println (net, "has 0 host count?", hosts)
             continue
@@ -108,7 +108,7 @@ func net2hosts_exclude (cidr string, ex []net.IP) ([]string, error) {
             }
         }
         if skip == true {
-            log_info.Println ("Skip self ip", ip)
+            log_dbg.Println ("Skip self ip", ip)
             continue
         }
         ips = append(ips, ip.String())
@@ -154,7 +154,7 @@ func scan_one_host (host string) {
         User: "root",
         Auth: []ssh.AuthMethod{ssh.Password("oakridge")},
         HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-        Timeout: time.Second*5,
+        Timeout: time.Second*3,
     }
 
     dst.WriteString(host)
