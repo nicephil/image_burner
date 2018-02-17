@@ -23,6 +23,13 @@ var (
 )
 
 
+type Device struct {
+    ipv4    string
+    buffer  []byte
+}
+
+var dev_list []Device
+
 func main() {
 
     init_log ()
@@ -50,15 +57,22 @@ func main() {
         // do all hosts in a subnet in a parallel
         wg.Add(num)
         for _, h := range hosts {
-            go worker (h)
+            go scan_one_host (h)
         }
         wg.Wait()
         log_info.Println ("Done subnet", net)
+    }
+
+
+    log_info.Println ("Total found host:", len(dev_list))
+    for _, d := range dev_list {
+        log_info.Println (d.ipv4, string(d.buffer))
     }
 }
 
 func init_log() {
     log_dbg = log.New(ioutil.Discard, "DEBUG: ",    log.Ldate|log.Ltime|log.Lshortfile)
+    //log_dbg = log.New(os.Stdout, "DEBUG: ",    log.Ldate|log.Ltime|log.Lshortfile)
     log_info = log.New(os.Stdout, "INFO: ",         log.Ldate|log.Ltime|log.Lshortfile)
     log_wrn = log.New(os.Stdout, "WARNING: ",       log.Ldate|log.Ltime|log.Lshortfile)
     log_err = log.New(os.Stderr, "ERROR: ",         log.Ldate|log.Ltime|log.Lshortfile)
@@ -133,15 +147,9 @@ func get_local_subnets() ([]string, []net.IP, error) {
 }
 
 
-func worker (host string) {
-    log_dbg.Println ("connecting ", host)
-    worker1 (host)
-    log_dbg.Println("finished", host)
-    defer wg.Done()
-}
-
-func worker1 (host string) {
+func scan_one_host (host string) {
     var dst bytes.Buffer
+    defer wg.Done()
     sshConfig := &ssh.ClientConfig{
         User: "root",
         Auth: []ssh.AuthMethod{ssh.Password("oakridge")},
@@ -170,5 +178,6 @@ func worker1 (host string) {
         log_err.Println (err)
         return
     }
-    log_info.Println(string(out))
+    //log_info.Println(string(out))
+    dev_list = append(dev_list, Device{ipv4: host, buffer: out})
 }
