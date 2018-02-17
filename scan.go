@@ -10,12 +10,13 @@ import (
         "strings"
         "strconv"
 	"golang.org/x/crypto/ssh"
+        "gopkg.in/cheggaaa/pb.v1"
 )
 
 /*
  * global vars
 */
-var wg sync.WaitGroup       // this to wait all worker before exit
+var scan_sync sync.WaitGroup       // this to wait all worker before exit
 
 type Device struct {
     ipv4    string
@@ -58,6 +59,18 @@ func dump_dev_list () {
     }
 }
 
+func progress_bar (total int, p chan string, q chan int) {
+    bar := pb.StartNew (total)
+    bar.ShowCounters = false
+    bar.ShowTimeLeft = false
+    bar.ShowSpeed = false
+    for w := range p {
+        log_dbg.Println("progress:", w)
+        bar.Increment()
+    }
+    bar.FinishPrint("Scan done")
+    close (q)
+}
 func scan_local_subnet () {
 
     // get all subnet
@@ -76,17 +89,25 @@ func scan_local_subnet () {
         }
         num := len(hosts)
         log_dbg.Println ("Trying ", num, "possible hosts")
-        if num == 0 {                                    // just be cautious, should not happen
+        // just be cautious, should not happen
+        if num == 0 {
             log_info.Println (net, "has 0 host count?", hosts)
             continue
         }
+
+        p := make(chan string, num)
+        q := make(chan int)
+        go progress_bar (num, p, q)
+
         // do all hosts in one subnet in a parallel
-        wg.Add(num)
+        scan_sync.Add(num)
         for _, h := range hosts {
-            go scan_one_host (h)
+            go scan_one_host (h, p)
         }
-        wg.Wait()
-        log_dbg.Println ("Done subnet", net)
+        scan_sync.Wait()
+        close (p)
+        dummy :=  <-q
+        log_dbg.Println ("Done subnet %d", net, dummy)
     }
 }
 
@@ -160,9 +181,13 @@ func get_local_subnets() ([]string, []net.IP, error) {
 }
 
 
-func scan_one_host (host string) {
+func scan_one_host (host string, progress chan string) {
     var dst bytes.Buffer
-    defer wg.Done()
+    var out []byte
+    var err error
+    var client *ssh.Client
+    var session *ssh.Session
+    defer scan_sync.Done()
     sshConfig := &ssh.ClientConfig{
         User: "root",
         Auth: []ssh.AuthMethod{ssh.Password("oakridge")},
@@ -172,25 +197,28 @@ func scan_one_host (host string) {
 
     dst.WriteString(host)
     dst.WriteString(":22")
-    client, err := ssh.Dial("tcp", dst.String(), sshConfig)
+    client, err = ssh.Dial("tcp", dst.String(), sshConfig)
 
     if err != nil {
         log_dbg.Println (err)
-        return
+        goto BACK
     }
     defer client.Close()
 
-    session, err := client.NewSession()
+    session, err = client.NewSession()
     if err != nil {
         log_err.Println (err)
-        return
+        goto BACK
     }
 
-    out, err := session.CombinedOutput("cat /etc/issue")
+    out, err = session.CombinedOutput("cat /etc/issue")
     if err != nil {
         log_err.Println (err)
-        return
+        goto BACK
     }
     //log_info.Println(string(out))
     dev_list = append(dev_list, Device{ipv4: host, buffer: out})
+
+BACK:
+    progress <- dst.String()
 }
