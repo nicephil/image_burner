@@ -11,6 +11,7 @@ import (
         "strconv"
 	"golang.org/x/crypto/ssh"
         "gopkg.in/cheggaaa/pb.v1"
+        "image_burner/util"
 )
 
 /*
@@ -182,20 +183,6 @@ func get_local_subnets() ([]string, []net.IP, error) {
 }
 
 
-func one_cmd (c *ssh.Client, cmd string) ([]byte, error) {
-    s, err := c.NewSession()
-    if err != nil {
-        return nil, err
-    }
-    defer s.Close()
-
-    buf,err := s.Output (cmd)
-    if err != nil {
-        return nil, err
-    }
-    return buf, nil
-}
-
 func scan_one_ap (host string, progress chan string) {
     var dst bytes.Buffer
     var dev Device
@@ -222,14 +209,14 @@ func scan_one_ap (host string, progress chan string) {
     }
     defer client.Close()
 
-    buf, err := one_cmd (client, "uci get productinfo.productinfo.model")
+    buf, err := oakUtility.One_cmd (client, "uci get productinfo.productinfo.model")
     if err != nil {
         log_dbg.Println (host, "model", err)
         return
     }
     dev.model = strings.TrimSpace(string(buf))
 
-    buf, err = one_cmd (client, "uci get system.@system[0].hostname")
+    buf, err = oakUtility.One_cmd (client, "uci get system.@system[0].hostname")
     if err != nil {
         log_dbg.Println (host, "hostname", err)
         return
