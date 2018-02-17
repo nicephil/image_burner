@@ -34,7 +34,7 @@ func dump_dev_list () {
         os.Exit(0)
     }
     for {
-        fmt.Printf("\nPlease choose devices to install image(Q to quit):\n")
+        fmt.Printf("\nPlease choose devices to restore image(Q to quit):\n")
         fmt.Printf("[0] All devices\n")
         for i, d := range dev_list {
             fmt.Printf("[%d] %v\n", i+1, d)
@@ -103,7 +103,7 @@ func scan_local_subnet () {
         // do all hosts in one subnet in a parallel
         scan_sync.Add(num)
         for _, h := range hosts {
-            go scan_one_host (h, p)
+            go scan_one_ap (h, p)
         }
         scan_sync.Wait()
         close (p)
@@ -196,7 +196,7 @@ func one_cmd (c *ssh.Client, cmd string) ([]byte, error) {
     return buf, nil
 }
 
-func scan_one_host (host string, progress chan string) {
+func scan_one_ap (host string, progress chan string) {
     var dst bytes.Buffer
     var dev Device
 
