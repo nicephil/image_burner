@@ -19,8 +19,10 @@ import (
 var scan_sync sync.WaitGroup       // this to wait all worker before exit
 
 type Device struct {
-    ipv4    string
-    buffer  []byte
+    ipv4        string
+    model       string
+    hostname    string
+    os          string
 }
 
 var dev_list []Device
@@ -32,11 +34,10 @@ func dump_dev_list () {
         os.Exit(0)
     }
     for {
-        fmt.Printf("\nPlease choose which to install image(Q to quit):\n")
+        fmt.Printf("\nPlease choose devices to install image(Q to quit):\n")
         fmt.Printf("[0] All devices\n")
         for i, d := range dev_list {
-            fmt.Printf("[%d] %s %d\n", i+1, d.ipv4, len(d.buffer))
-            log_dbg.Println (d.ipv4, string(d.buffer))
+            fmt.Printf("[%d] %v\n", i+1, d)
         }
         fmt.Printf("Your choice:")
         fmt.Scanf("%s\n", &choice)
@@ -181,13 +182,29 @@ func get_local_subnets() ([]string, []net.IP, error) {
 }
 
 
+func one_cmd (c *ssh.Client, cmd string) ([]byte, error) {
+    s, err := c.NewSession()
+    if err != nil {
+        return nil, err
+    }
+    defer s.Close()
+
+    buf,err := s.Output (cmd)
+    if err != nil {
+        return nil, err
+    }
+    return buf, nil
+}
+
 func scan_one_host (host string, progress chan string) {
     var dst bytes.Buffer
-    var out []byte
-    var err error
-    var client *ssh.Client
-    var session *ssh.Session
+    var dev Device
+
     defer scan_sync.Done()
+    defer func () {
+        progress <- dst.String()
+    }()
+
     sshConfig := &ssh.ClientConfig{
         User: "root",
         Auth: []ssh.AuthMethod{ssh.Password("oakridge")},
@@ -197,28 +214,28 @@ func scan_one_host (host string, progress chan string) {
 
     dst.WriteString(host)
     dst.WriteString(":22")
-    client, err = ssh.Dial("tcp", dst.String(), sshConfig)
 
+    client, err := ssh.Dial("tcp", dst.String(), sshConfig)
     if err != nil {
         log_dbg.Println (err)
-        goto BACK
+        return
     }
     defer client.Close()
 
-    session, err = client.NewSession()
+    buf, err := one_cmd (client, "uci get productinfo.productinfo.model")
     if err != nil {
-        log_err.Println (err)
-        goto BACK
+        log_dbg.Println (host, "model", err)
+        return
     }
+    dev.model = strings.TrimSpace(string(buf))
 
-    out, err = session.CombinedOutput("cat /etc/issue")
+    buf, err = one_cmd (client, "uci get system.@system[0].hostname")
     if err != nil {
-        log_err.Println (err)
-        goto BACK
+        log_dbg.Println (host, "hostname", err)
+        return
     }
-    //log_info.Println(string(out))
-    dev_list = append(dev_list, Device{ipv4: host, buffer: out})
+    dev.hostname= strings.TrimSpace(string(buf))
 
-BACK:
-    progress <- dst.String()
+    dev.ipv4 = host
+    dev_list = append(dev_list, dev)
 }
