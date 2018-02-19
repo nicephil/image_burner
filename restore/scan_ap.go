@@ -1,15 +1,12 @@
 package main
 
 import (
-        "time"
         "sync"
         "net"
-	"bytes"
         "fmt"
         "os"
         "strings"
         "strconv"
-	"golang.org/x/crypto/ssh"
         "gopkg.in/cheggaaa/pb.v1"
         "image_burner/util"
 )
@@ -20,10 +17,12 @@ import (
 var scan_sync sync.WaitGroup       // this to wait all worker before exit
 
 type Device struct {
-    ipv4        string
-    model       string
-    hostname    string
-    os          string
+    ipv4            string
+    model           string
+    mac             string
+    hostname        string
+    sw_version      string
+    boot_version    string
 }
 
 var dev_list []Device
@@ -35,14 +34,14 @@ func dump_dev_list () {
         os.Exit(0)
     }
     for {
-        fmt.Printf("\nPlease choose devices to restore image(Q to quit):\n")
+        fmt.Printf("\nPlease choose to restore image(Q to quit):\n")
         fmt.Printf("[0] All devices\n")
         for i, d := range dev_list {
-            fmt.Printf("[%d] %v\n", i+1, d)
+            fmt.Printf("[%d] %s %s %s %s\n", i+1, d.model, d.mac, d.ipv4, d.hostname)
         }
         fmt.Printf("Your choice:")
         fmt.Scanf("%s\n", &choice)
-        log_dbg.Println ("user input:", choice)
+        log.Debug.Println ("user input:", choice)
         if strings.ToUpper(choice) == "Q" {
             fmt.Printf("Quit\n")
             os.Exit(0)
@@ -56,7 +55,9 @@ func dump_dev_list () {
             fmt.Printf ("\n[%s] is out-of-range\n", choice)
             continue
         }
-        fmt.Printf ("You choose: [%d]\n", c)
+        fmt.Printf ("You selected: [%d] ... to-be-finished ...\n", c)
+        fmt.Printf ("press ENTER to quit\n")
+        fmt.Scanf("%s\n", &choice)
         break
     }
 }
@@ -67,10 +68,10 @@ func progress_bar (total int, p chan string, q chan int) {
     bar.ShowTimeLeft = false
     bar.ShowSpeed = false
     for w := range p {
-        log_dbg.Println("progress:", w)
+        log.Debug.Println("progress:", w)
         bar.Increment()
     }
-    bar.FinishPrint("Scan done")
+    bar.FinishPrint("")
     close (q)
 }
 func scan_local_subnet () {
@@ -78,7 +79,7 @@ func scan_local_subnet () {
     // get all subnet
     nets, selfs, err := get_local_subnets()
     if err != nil {
-        log_err.Fatalln(err)
+        log.Error.Fatalln(err)
     }
 
     // scan each subnet in batch mode
@@ -86,14 +87,14 @@ func scan_local_subnet () {
         fmt.Println ("Scanning subnet", net)
         hosts,err := net2hosts_exclude (net, selfs)
         if err != nil {
-            log_err.Println(err)
+            log.Error.Println(err)
             continue
         }
         num := len(hosts)
-        log_dbg.Println ("Trying ", num, "possible hosts")
+        log.Debug.Println ("Trying ", num, "possible hosts")
         // just be cautious, should not happen
         if num == 0 {
-            log_info.Println (net, "has 0 host count?", hosts)
+            log.Info.Println (net, "has 0 host count?", hosts)
             continue
         }
 
@@ -109,7 +110,7 @@ func scan_local_subnet () {
         scan_sync.Wait()
         close (p)
         dummy :=  <-q
-        log_dbg.Println ("Done subnet %d", net, dummy)
+        log.Debug.Println ("Done subnet %d", net, dummy)
     }
 }
 
@@ -144,7 +145,7 @@ func net2hosts_exclude (cidr string, ex []net.IP) ([]string, error) {
             }
         }
         if skip == true {
-            log_dbg.Println ("Skip self ip", ip)
+            log.Debug.Println ("Skip self ip", ip)
             continue
         }
         ips = append(ips, ip.String())
@@ -158,24 +159,24 @@ func get_local_subnets() ([]string, []net.IP, error) {
     var selfs []net.IP
     addrs, err := net.InterfaceAddrs()
     if err != nil {
-        log_err.Println(err)
+        log.Error.Println(err)
         return nil,nil,err
     }
     for _, a := range addrs {
         ip, net, err := net.ParseCIDR(a.String())
         if err != nil {
-            log_err.Println(err)
+            log.Error.Println(err)
             continue
         }
         if ip.To4() == nil {
-            log_dbg.Println("ignore addr not IPv4", a)
+            log.Debug.Println("ignore addr not IPv4", a)
             continue
         }
         if ip.IsLoopback() {
-            log_dbg.Println("ignore Loopback addr", a)
+            log.Debug.Println("ignore Loopback addr", a)
             continue
         }
-        log_dbg.Println("IPv4 Network", net)
+        log.Debug.Println("IPv4 Network", net)
         subnets = append(subnets, net.String())
         selfs = append(selfs, ip)
     }
@@ -184,44 +185,56 @@ func get_local_subnets() ([]string, []net.IP, error) {
 
 
 func scan_one_ap (host string, progress chan string) {
-    var dst bytes.Buffer
     var dev Device
 
     defer scan_sync.Done()
+
+    c := oakUtility.New_SSHClient (host, "22", "root", "oakridge")
+
     defer func () {
-        progress <- dst.String()
+        progress <- c.User+"@"+c.IPv4+":"+c.Port
     }()
 
-    sshConfig := &ssh.ClientConfig{
-        User: "root",
-        Auth: []ssh.AuthMethod{ssh.Password("oakridge")},
-        HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-        Timeout: time.Second*3,
-    }
-
-    dst.WriteString(host)
-    dst.WriteString(":22")
-
-    client, err := ssh.Dial("tcp", dst.String(), sshConfig)
-    if err != nil {
-        log_dbg.Println (err)
+    if err := c.Open(); err != nil {
+        log.Debug.Println(err)
         return
     }
-    defer client.Close()
+    defer c.Close()
 
-    buf, err := oakUtility.One_cmd (client, "uci get productinfo.productinfo.model")
+    buf, err := c.One_cmd ("uci get productinfo.productinfo.model")
     if err != nil {
-        log_dbg.Println (host, "model", err)
+        log.Debug.Println (host, err)
         return
     }
     dev.model = strings.TrimSpace(string(buf))
 
-    buf, err = oakUtility.One_cmd (client, "uci get system.@system[0].hostname")
+    buf, err = c.One_cmd ("uci get system.@system[0].hostname")
     if err != nil {
-        log_dbg.Println (host, "hostname", err)
+        log.Debug.Println (host, err)
         return
     }
     dev.hostname= strings.TrimSpace(string(buf))
+
+    buf, err = c.One_cmd ("uci get productinfo.productinfo.bootversion")
+    if err != nil {
+        log.Debug.Println (host, err)
+        return
+    }
+    dev.boot_version = strings.TrimSpace(string(buf))
+
+    buf, err = c.One_cmd ("uci get productinfo.productinfo.swversion")
+    if err != nil {
+        log.Debug.Println (host, err)
+        return
+    }
+    dev.sw_version = strings.TrimSpace(string(buf))
+
+    buf, err = c.One_cmd ("uci get productinfo.productinfo.mac")
+    if err != nil {
+        log.Debug.Println (host, err)
+        return
+    }
+    dev.mac = strings.TrimSpace(string(buf))
 
     dev.ipv4 = host
     dev_list = append(dev_list, dev)
