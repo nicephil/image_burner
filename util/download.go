@@ -1,5 +1,8 @@
 package oakUtility
 
+/*
+ * this is from https://golangcode.com/download-a-file-from-a-url/
+ */
 import (
 	"fmt"
 	"github.com/dustin/go-humanize"
@@ -33,24 +36,11 @@ func (wc WriteCounter) PrintProgress() {
 	fmt.Printf("\rDownloading... %s", humanize.Bytes(wc.Total))
 }
 
-/*
-func main() {
-	fmt.Println("Download Started")
-
-	fileUrl := "https://upload.wikimedia.org/wikipedia/commons/d/d6/Wp-w4-big.jpg"
-	err := DownloadFile("avatar.jpg", fileUrl)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Println("Download Finished")
-}
-*/
 
 // DownloadFile will download a url to a local file. It's efficient because it will
 // write as it downloads and not load the whole file into memory. We pass an io.TeeReader
 // into Copy() to report progress on the download.
-func DownloadFile(filepath string, url string) error {
+func DownloadFile(filepath string, url string, progress bool) error {
 
 	// Create the file, but give it a tmp file extension, this means we won't overwrite a
 	// file until it's downloaded, but we'll remove the tmp extension once downloaded.
@@ -67,15 +57,16 @@ func DownloadFile(filepath string, url string) error {
 	}
 	defer resp.Body.Close()
 
-	// Create our progress reporter and pass it to be used alongside our writer
-	counter := &WriteCounter{}
-	_, err = io.Copy(out, io.TeeReader(resp.Body, counter))
+    if progress == true {
+	    counter := &WriteCounter{}
+	    _, err = io.Copy(out, io.TeeReader(resp.Body, counter))
+	    fmt.Print("\n")
+    } else {
+	    _, err = io.Copy(out, resp.Body)
+    }
 	if err != nil {
-		return err
+	    return err
 	}
-
-	// The progress use the same line so print a new line once it's finished downloading
-	fmt.Print("\n")
 
 	err = os.Rename(filepath+".tmp", filepath)
 	if err != nil {

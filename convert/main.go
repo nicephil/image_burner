@@ -53,7 +53,7 @@ func main() {
     if strings.Compare(strings.ToUpper(dummy), "Y") == 0 {
         local := img_url["UBNT"][0]
         url := img_url["UBNT"][1]
-        if err := oakUtility.DownloadFile (local, url); err != nil {
+        if err := oakUtility.DownloadFile (local, url, true); err != nil {
             println ("Download fail:", err)
             os.Exit (1)
         }
