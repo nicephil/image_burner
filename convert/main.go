@@ -2,7 +2,9 @@ package main
 
 import (
     "fmt"
+    "strings"
     "image_burner/util"
+    "os"
 )
 
 /*
@@ -11,6 +13,10 @@ import (
 var netlist []Subnet
 var Banner string
 var log oakUtility.OakLogger
+var img_url = map[string][]string {
+    "UBNT": {"oakridge.firmwire.ubnt.tar.gz",  "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-sysupgrade.bin.tar.gz"},
+    "QTS":  {"oakridge.firmwire.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+}
 
 
 func list_all_dev () {
@@ -34,10 +40,24 @@ func init () {
 
 func main() {
     var dummy string
+
     println(Banner)
+
     scan_local_subnet ()
     println ("\nScan finished successfully\n")
+
     list_all_dev ()
-    fmt.Println ("\npress ENTER to quit")
+
+    fmt.Printf ("\nDownload latest firmware for UBNT HW?(Y/N):")
     fmt.Scanf("%s\n", &dummy)
+
+    if strings.Compare(strings.ToUpper(dummy), "Y") == 0 {
+        local := img_url["UBNT"][0]
+        url := img_url["UBNT"][1]
+        if err := oakUtility.DownloadFile (local, url); err != nil {
+            println ("Download fail:", err)
+            os.Exit (1)
+        }
+        println("Debug: Download saved as:", local)
+    }
 }
