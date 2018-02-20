@@ -1,5 +1,8 @@
 #!/bin/bash
 
+# cross compile platform list
+# https://www.digitalocean.com/community/tutorials/how-to-build-go-executables-for-multiple-platforms-on-ubuntu-16-04
+
 target="mac"
 [ $# -eq 1 ] && target="$1"
 
