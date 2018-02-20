@@ -47,7 +47,7 @@ func main() {
 
     list_all_dev ()
 
-    fmt.Printf ("\nDownload latest firmware for UBNT HW?(Y/N):")
+    println("\nDownload latest firmware for UBNT HW?(Y/N):")
     fmt.Scanf("%s\n", &dummy)
 
     if strings.Compare(strings.ToUpper(dummy), "Y") == 0 {

@@ -4,11 +4,9 @@ import (
         "sync"
         "net"
         "fmt"
-        "os"
-        "time"
         "runtime"
         "image_burner/util"
-        "github.com/briandowns/spinner"
+        "image_burner/spinner"
 )
 
 type Subnet struct {
@@ -33,15 +31,11 @@ func (s *Subnet) Scan () {
     }
 
     // spinner
-    var p *spinner.Spinner
     if runtime.GOOS != "windows" {          // spinner not working for windows
-        p = spinner.New(spinner.CharSets[35], 200*time.Millisecond)
-        p.Color("green")
-        p.Prefix = fmt.Sprintf("%s ", s.Net)
-        //p.Suffix = "  This is suffix"
-        p.Writer = os.Stderr
-        p.Start()
-        defer p.Stop ()
+        p := spinner.StartNew(s.Net)
+        defer func () {
+            p.Stop ()
+        } ()
     }
 
     // do all hosts in one subnet in a parallel
@@ -63,7 +57,7 @@ func (s *Subnet) scan_one (host string) {
 }
 
 func (s *Subnet) OneLineSummary () {
-    fmt.Printf ("%-18s ... found %3d Oakridge device\n", s.Net, len(s.Oak_dev_list))
+    fmt.Printf("✓ %s: Completed, found %d Oakridge device\n",s.Net,len(s.Oak_dev_list))
 }
 func scan_local_subnet () {
     nets, selfs, err := oakUtility.Get_local_subnets()
