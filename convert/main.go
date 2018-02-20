@@ -44,7 +44,6 @@ func main() {
     println(Banner)
 
     scan_local_subnet ()
-    println ("\nScan finished successfully\n")
 
     list_all_dev ()
 

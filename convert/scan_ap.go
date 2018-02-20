@@ -77,4 +77,6 @@ func scan_local_subnet () {
         n.OneLineSummary()
         netlist =  append(netlist, n)
     }
+
+    println ("\nScan finished successfully\n")
 }
