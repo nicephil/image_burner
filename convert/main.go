@@ -36,7 +36,7 @@ func main() {
     var dummy string
     println(Banner)
     scan_local_subnet ()
-    fmt.Printf ("\nScan finished successfully\n")
+    println ("\nScan finished successfully\n")
     list_all_dev ()
     fmt.Println ("\npress ENTER to quit")
     fmt.Scanf("%s\n", &dummy)

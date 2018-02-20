@@ -67,7 +67,7 @@ func scan_local_subnet () {
         log.Error.Fatalln(err)
     }
 
-    println("Scanning local networks ...")
+    println("Scanning local networks ...\n")
 
     // scan each subnet
     for _, net := range nets {
