@@ -1,33 +1,43 @@
 package main
 
 import (
-	"log"
-        "io/ioutil"
-	"os"
+    "fmt"
+    "image_burner/util"
 )
 
+/*
+ * global vars
+*/
+var netlist []Subnet
+var Banner string
+var log oakUtility.OakLogger
 
-// debug level
-var (
-    log_dbg     *log.Logger
-    log_info    *log.Logger
-    log_wrn     *log.Logger
-    log_err     *log.Logger
-)
+
+func list_all_dev () {
+    var oak []*oakUtility.Oakridge_Device
+    for _,n:=range netlist {
+        for _,d:=range n.Oak_dev_list {
+            oak = append (oak, d)
+        }
+    }
+    oakUtility.Oakdev_PrintHeader ()
+    for i,d:=range oak {
+        fmt.Printf("%-3d %s\n", i+1, d.OneLineSummary())
+    }
+}
+
+func init () {
+    Banner="\nOakridge Firmware Update Utility, Ver 1.01, (c) Oakridge Networks, Inc. 2018\n"
+    log = oakUtility.New_OakLogger()
+    log.Set_level ("info")
+}
 
 func main() {
-
-    init_log ()
-    scan_local_subnet ()    // result stored in global dev_list
-    dump_dev_list ()
+    var dummy string
+    println(Banner)
+    scan_local_subnet ()
+    fmt.Printf ("\nScan finished successfully\n")
+    list_all_dev ()
+    fmt.Println ("\npress ENTER to quit")
+    fmt.Scanf("%s\n", &dummy)
 }
-
-
-func init_log() {
-    log_dbg = log.New(ioutil.Discard, "DEBUG: ",    log.Ldate|log.Ltime|log.Lshortfile)
-    //log_dbg = log.New(os.Stderr, "DEBUG: ",    log.Ldate|log.Ltime|log.Lshortfile)
-    log_info = log.New(os.Stdout, "INFO: ",         log.Ldate|log.Ltime|log.Lshortfile)
-    log_wrn = log.New(os.Stdout, "WARNING: ",       log.Ldate|log.Ltime|log.Lshortfile)
-    log_err = log.New(os.Stderr, "ERROR: ",         log.Ldate|log.Ltime|log.Lshortfile)
-}
-
