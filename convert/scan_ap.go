@@ -59,7 +59,7 @@ func (s *Subnet) scan_one (host string) {
 }
 
 func (s *Subnet) OneLineSummary () {
-    fmt.Println (s.Net, "... found", len(s.Oak_dev_list), "Oakridge device")
+    fmt.Printf ("%-18s ... found %3d Oakridge device\n", s.Net, len(s.Oak_dev_list))
 }
 func scan_local_subnet () {
     nets, selfs, err := oakUtility.Get_local_subnets()
