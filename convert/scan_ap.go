@@ -6,6 +6,7 @@ import (
         "fmt"
         "os"
         "time"
+        "runtime"
         "image_burner/util"
         "github.com/briandowns/spinner"
 )
@@ -32,13 +33,16 @@ func (s *Subnet) Scan () {
     }
 
     // spinner
-    p := spinner.New(spinner.CharSets[10], 200*time.Millisecond)
-    p.Prefix = fmt.Sprintf("%s ", s.Net)
-    //p.Suffix = "  This is suffix"
-    p.Writer = os.Stderr
-    p.Color("red")
-    p.Start()
-    defer p.Stop ()
+    var p *spinner.Spinner
+    if runtime.GOOS != "windows" {          // spinner not working for windows
+        p = spinner.New(spinner.CharSets[35], 200*time.Millisecond)
+        p.Color("green")
+        p.Prefix = fmt.Sprintf("%s ", s.Net)
+        //p.Suffix = "  This is suffix"
+        p.Writer = os.Stderr
+        p.Start()
+        defer p.Stop ()
+    }
 
     // do all hosts in one subnet in a parallel
     for _, h := range hosts {
