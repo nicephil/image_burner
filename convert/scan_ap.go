@@ -13,6 +13,7 @@ type Subnet struct {
     Net             string
     holes           []net.IP                        // skip those ip-addr
     Oak_dev_list    []*oakUtility.Oakridge_Device
+    UBNT_ap_list    []*oakUtility.UBNT_AP
     batch           sync.WaitGroup                   // this to wait all host finish before exit
 }
 
@@ -53,11 +54,13 @@ func (s *Subnet) scan_one (host string) {
 
     if dev := c.Is_oakridge_dev(); dev != nil {
             s.Oak_dev_list = append(s.Oak_dev_list, dev)
+    } else if dev := c.Is_ubnt_ap(); dev != nil {
+            s.UBNT_ap_list = append(s.UBNT_ap_list, dev)
     }
 }
 
 func (s *Subnet) OneLineSummary () {
-    fmt.Printf("✓ %s: Completed, found %d Oakridge device\n",s.Net,len(s.Oak_dev_list))
+    fmt.Printf("✓ %s: Completed, %d Oakridge, %d UBNT devices\n",s.Net,len(s.Oak_dev_list),len(s.UBNT_ap_list))
 }
 func scan_local_subnet () {
     nets, selfs, err := oakUtility.Get_local_subnets()
@@ -75,6 +78,4 @@ func scan_local_subnet () {
         n.OneLineSummary()
         netlist =  append(netlist, n)
     }
-
-    println ("\nScan finished successfully\n")
 }

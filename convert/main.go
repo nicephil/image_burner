@@ -20,15 +20,18 @@ var img_url = map[string][]string {
 
 
 func list_all_dev () {
-    var oak []*oakUtility.Oakridge_Device
-    for _,n:=range netlist {
-        for _,d:=range n.Oak_dev_list {
-            oak = append (oak, d)
-        }
-    }
+    cnt := 0
+
     oakUtility.Oakdev_PrintHeader ()
-    for i,d:=range oak {
-        fmt.Printf("%-3d %s\n", i+1, d.OneLineSummary())
+    for _,n:=range netlist {
+        for _,o :=range n.Oak_dev_list {
+            cnt++
+            fmt.Printf("%-3d %s\n", cnt, o.OneLineSummary())
+        }
+        for _,u :=range n.UBNT_ap_list {
+            cnt++
+            fmt.Printf("%-3d %s\n", cnt, u.OneLineSummary())
+        }
     }
 }
 
@@ -49,6 +52,7 @@ func main() {
 
     println("\nDownload latest firmware for UBNT HW?(Y/N):")
     fmt.Scanf("%s\n", &dummy)
+    oakUtility.ClearLine ()
 
     if strings.Compare(strings.ToUpper(dummy), "Y") == 0 {
         local := img_url["UBNT"][0]

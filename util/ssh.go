@@ -23,6 +23,58 @@ func New_SSHClient (host string) SSHClient {
     }
 }
 
+type UBNT_AP struct {
+    Mac             string
+    IPv4            string
+    HWmodel         string
+    SWver           string
+}
+func (c *SSHClient) Is_ubnt_ap () (*UBNT_AP) {
+
+    if err := c.Open("ubnt", "ubnt"); err != nil {
+        return nil
+    }
+    defer c.Close()
+
+    var dev UBNT_AP
+
+    buf, err := c.One_cmd ("cat /proc/ubnthal/system.info")
+    if err != nil {
+        return nil
+    }
+    // pass output string to get mac and hwmodel
+    tvs := strings.Split (strings.TrimSpace(string(buf)), "\n")
+    for _, t:=range tvs {
+        switch v := strings.Split (t, "="); v[0] {
+        case "eth0.macaddr":
+            dev.Mac= v[1]
+        case "systemid":
+            switch v[1] {
+            case "e517":
+                dev.HWmodel="AC-LITE"
+            case "e527":
+                dev.HWmodel="AC-LR"
+            case "e537":
+                dev.HWmodel="AC-PRO"
+            default:
+                dev.HWmodel=v[1]
+            }
+        }
+    }
+
+    // sw ver
+    buf, err = c.One_cmd ("cat /etc/version")
+    if err != nil {
+        return nil
+    }
+    dev.SWver= strings.TrimSpace(string(buf))
+    dev.IPv4 = c.IPv4
+    return &dev
+}
+func (d *UBNT_AP) OneLineSummary () string {
+    return fmt.Sprintf ("%-16s%-8s%-18s%-16s%s", "Ubiquiti", d.HWmodel, d.Mac, d.IPv4, d.SWver)
+}
+
 type Oakridge_Device struct {
     Mac             string
     HWvendor        string
@@ -31,11 +83,11 @@ type Oakridge_Device struct {
     Firmware        string  // this is bootloader version
 }
 func Oakdev_PrintHeader () {
-    fmt.Printf ("%-4s%-16s%-8s%-18s%-16s%s\n", "No.", "HWvendor", "Model", "Mac", "IPv4", "Firmware")
+    fmt.Printf ("\n%-4s%-16s%-8s%-18s%-16s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Firmware")
     fmt.Printf ("%s\n", strings.Repeat("=",96))
 }
 func (d *Oakridge_Device) OneLineSummary () string {
-    return fmt.Sprintf ("%-16s%-8s%-18s%-16s%s", d.HWvendor, d.HWmodel, d.Mac, d.IPv4, d.Firmware)
+    return fmt.Sprintf ("%-16s%-8s%-18s%-16s%s", "Oakridge", d.HWmodel, d.Mac, d.IPv4, d.Firmware)
 }
 func Get_local_subnets() ([]string, []net.IP, error) {
     var subnets []string

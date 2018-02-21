@@ -5,6 +5,7 @@ import (
     "strings"
     "io/ioutil"
     "os"
+    "fmt"
 )
 
 
@@ -47,4 +48,10 @@ func (l *OakLogger) Set_level (level string) {
         l.Warn  = log.New(ioutil.Discard, "", 0)
         l.Error = log.New(os.Stderr, "ERROR: ",   log.Ldate|log.Ltime|log.Lshortfile)
     }
+}
+
+func ClearLine() {
+    fmt.Printf("\033[2K")
+    fmt.Println()
+    fmt.Printf("\033[1A")
 }
