@@ -69,13 +69,13 @@ func on_demand_download (t *Target) error {
             }
             fmt.Println("File download done")
         } else {
-            fmt.Printf("To-Do: %s exist, skip download, check file checksum\n", local)
+            fmt.Printf("%s exist, skip download(TODO:check file checksum)\n", local)
         }
         local_imgfile[t.HWmodel] = local
     }
     return nil
 }
-func (t *Target) Install_img (s *sync.WaitGroup) {
+func Install_img (t Target, s *sync.WaitGroup) {
     defer s.Done()
 
     p := spinner.StartNew("Install "+t.host+" ...")
@@ -89,29 +89,31 @@ func (t *Target) Install_img (s *sync.WaitGroup) {
 
     remotefile := "oakridge.tar.gz"
     _,err := c.Scp (local_imgfile[t.HWmodel], remotefile, "0644")
-    p.Stop ()
     if err != nil {
         println (err)
         return
     }
-    fmt.Printf ("\nCopy to %s:%s done\n", t.host, remotefile)
+
+    fmt.Printf ("Upgrade %s image, MUST NOT POWER OFF DEVICE ...\n", t.host)
 
     var cmds = []string {
     "tar xzf "+remotefile,
     "rm -rvf "+remotefile,
     "dd if=openwrt-ar71xx-generic-ubnt-unifi-squashfs-sysupgrade.bin of=kernel0.bin bs=7929856 count=1",
     "dd if=openwrt-ar71xx-generic-ubnt-unifi-squashfs-sysupgrade.bin of=kernel1.bin bs=7929856 count=1 skip=1",
-    "ls -ltr",
+    "mtd write kernel0.bin kernel0",
+    "mtd write kernel1.bin kernel1",
+    "reboot",
     }
-    for i, cmd := range cmds {
-        buf, err := c.One_cmd (cmd)
+    for _, cmd := range cmds {
+        _, err := c.One_cmd (cmd)
         if err != nil {
             println (err)
-            continue
+            return
         }
-        println (i,") ", cmd,strings.TrimSpace(string(buf)))
     }
-    fmt.Printf ("mtd ready!!!\n")
+    p.Stop ()
+    fmt.Printf ("%s Image upgraded, rebooting ...\n", t.host)
 }
 func install_oak_firmwire () {
     var choice string
@@ -119,6 +121,7 @@ func install_oak_firmwire () {
 
     println("\nInstall Oakridge firmware to all 3rd party HW?(Y/N):")
     fmt.Scanf("%s\n", &choice)
+    fmt.Printf("\rYou choose: %s\n", choice)
     oakUtility.ClearLine ()
     if strings.Compare(strings.ToUpper(choice), "Y") != 0 {
         return
@@ -142,7 +145,7 @@ func install_oak_firmwire () {
     var s sync.WaitGroup
     for _, t:= range targets {
         s.Add (1)
-        go t.Install_img(&s)
+        go Install_img(t, &s)
     }
     s.Wait()
 }

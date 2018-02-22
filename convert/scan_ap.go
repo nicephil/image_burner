@@ -4,7 +4,7 @@ import (
         "sync"
         "net"
         "fmt"
-        "runtime"
+        //"runtime"
         "image_burner/util"
         "image_burner/spinner"
 )
@@ -32,12 +32,10 @@ func (s *Subnet) Scan () {
     }
 
     // spinner
-    if runtime.GOOS != "windows" {          // spinner not working for windows
-        p := spinner.StartNew(s.Net)
-        defer func () {
-            p.Stop ()
-        } ()
-    }
+    p := spinner.StartNew(s.Net)
+    defer func () {
+        p.Stop ()
+    } ()
 
     // do all hosts in one subnet in a parallel
     for _, h := range hosts {

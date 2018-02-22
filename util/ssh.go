@@ -170,7 +170,7 @@ func (c *SSHClient) One_cmd (cmd string) ([]byte, error) {
     }
     defer s.Close()
 
-    buf,err := s.Output (cmd)
+    buf,err := s.CombinedOutput (cmd)
     if err != nil {
         return nil, err
     }
