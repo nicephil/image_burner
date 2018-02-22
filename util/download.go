@@ -16,7 +16,8 @@ import (
 // interface and we can pass this into io.TeeReader() which will report progress on each
 // write cycle.
 type WriteCounter struct {
-	Total uint64
+    Total uint64
+    Prefix_txt string
 }
 
 func (wc *WriteCounter) Write(p []byte) (int, error) {
@@ -29,18 +30,18 @@ func (wc *WriteCounter) Write(p []byte) (int, error) {
 func (wc WriteCounter) PrintProgress() {
 	// Clear the line by using a character return to go back to the start and remove
 	// the remaining characters by filling it with spaces
-	fmt.Printf("\r%s", strings.Repeat(" ", 35))
+	fmt.Printf("\r%s", strings.Repeat(" ", len(wc.Prefix_txt)+16))
 
 	// Return again and print current status of download
 	// We use the humanize package to print the bytes in a meaningful way (e.g. 10 MB)
-	fmt.Printf("\rDownloading... %s", humanize.Bytes(wc.Total))
+	fmt.Printf("\r%s%s", wc.Prefix_txt, humanize.Bytes(wc.Total))
 }
 
 
 // DownloadFile will download a url to a local file. It's efficient because it will
 // write as it downloads and not load the whole file into memory. We pass an io.TeeReader
 // into Copy() to report progress on the download.
-func DownloadFile(filepath string, url string, progress bool) error {
+func DownloadFile(filepath string, url string, progress bool, prefix string) error {
 
 	// Create the file, but give it a tmp file extension, this means we won't overwrite a
 	// file until it's downloaded, but we'll remove the tmp extension once downloaded.
@@ -58,7 +59,7 @@ func DownloadFile(filepath string, url string, progress bool) error {
 	defer resp.Body.Close()
 
     if progress == true {
-	    counter := &WriteCounter{}
+	    counter := &WriteCounter{Prefix_txt: prefix}
 	    _, err = io.Copy(out, io.TeeReader(resp.Body, counter))
 	    fmt.Print("\n")
     } else {

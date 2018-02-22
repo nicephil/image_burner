@@ -4,10 +4,18 @@ import (
     "time"
     "fmt"
     "net"
+    "os"
+    "io"
+    "path"
     "strings"
     "golang.org/x/crypto/ssh"
 )
 
+const (
+    AC_LITE = "AC-LITE"
+    AC_LR   = "AC-LR"
+    AC_PRO  = "AC-PRO"
+)
 
 type SSHClient struct {
     IPv4        string
@@ -51,13 +59,14 @@ func (c *SSHClient) Is_ubnt_ap () (*UBNT_AP) {
         case "systemid":
             switch v[1] {
             case "e517":
-                dev.HWmodel="AC-LITE"
+                dev.HWmodel=AC_LITE
             case "e527":
-                dev.HWmodel="AC-LR"
+                dev.HWmodel=AC_LR
             case "e537":
-                dev.HWmodel="AC-PRO"
+                dev.HWmodel=AC_PRO
             default:
-                dev.HWmodel=v[1]
+                // only support model above
+                return nil
             }
         }
     }
@@ -231,4 +240,42 @@ func (c *SSHClient) Is_oakridge_dev () (*Oakridge_Device) {
     dev.Firmware = strings.TrimSpace(string(buf))
     dev.IPv4 = c.IPv4
     return &dev
+}
+func (c *SSHClient) Scp (local string, remote string, permission string) (int64,error) {
+    f,err := os.Open(local)
+    if err != nil {
+        return 0,err
+    }
+    defer f.Close()
+
+    stat,err := f.Stat()
+    if err != nil {
+        return 0,err
+    }
+
+    s, err := c.client.NewSession()
+    if err != nil {
+        return 0, err
+    }
+    defer s.Close()
+
+    filename := path.Base(remote)
+    directory := path.Dir(remote)
+
+    go func () {
+        w, err := s.StdinPipe()
+        if err != nil {
+            println (err)
+            return
+        }
+        defer w.Close()
+
+        fmt.Fprintln(w, "C"+permission, stat.Size(), filename)
+        io.Copy(w, f)
+        fmt.Fprintln(w, "\x00")
+    } ()
+
+    s.Run("/usr/bin/scp -t " + directory)
+
+    return stat.Size(), nil
 }

@@ -41,13 +41,13 @@ func (s *Subnet) Scan () {
 
     // do all hosts in one subnet in a parallel
     for _, h := range hosts {
+        s.batch.Add(1)
         go s.scan_one (h)
     }
     s.batch.Wait()
 }
 func (s *Subnet) scan_one (host string) {
 
-    s.batch.Add(1)
     defer s.batch.Done()
 
     c := oakUtility.New_SSHClient (host)
