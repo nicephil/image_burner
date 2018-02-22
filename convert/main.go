@@ -119,14 +119,6 @@ func install_oak_firmwire () {
     var choice string
     var targets []Target
 
-    println("\nInstall Oakridge firmware to all 3rd party HW?(Y/N):")
-    fmt.Scanf("%s\n", &choice)
-    fmt.Printf("\rYou choose: %s\n", choice)
-    oakUtility.ClearLine ()
-    if strings.Compare(strings.ToUpper(choice), "Y") != 0 {
-        return
-    }
-
     // prepare the list
     for _,n:=range netlist {
         for _,u :=range n.UBNT_ap_list {
@@ -139,6 +131,18 @@ func install_oak_firmwire () {
                 targets = append(targets, t)
             }
         }
+    }
+
+    if len(targets) == 0 {
+        return
+    }
+
+    println("\nInstall Oakridge firmware to all 3rd party HW?(Y/N):")
+    fmt.Scanf("%s\n", &choice)
+    fmt.Printf("\rYou choose: %s\n", choice)
+    oakUtility.ClearLine ()
+    if strings.Compare(strings.ToUpper(choice), "Y") != 0 {
+        return
     }
 
     // burn img in parallel

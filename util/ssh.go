@@ -206,26 +206,14 @@ func (c *SSHClient) Is_oakridge_dev () (*Oakridge_Device) {
     }
     defer c.Close()
 
-    buf, err := c.One_cmd ("uci show okcfg")
-    if err != nil {
-        return nil
-    }
-
     var dev Oakridge_Device
 
     // mac-addr
-    buf, err = c.One_cmd ("uci get productinfo.productinfo.mac")
+    buf, err := c.One_cmd ("uci get productinfo.productinfo.mac")
     if err != nil {
         return nil
     }
     dev.Mac = strings.TrimSpace(string(buf))
-
-    // HW vendor
-    buf, err = c.One_cmd ("uci get productinfo.productinfo.model")
-    if err != nil {
-        return nil
-    }
-    dev.HWvendor = strings.Split(strings.TrimSpace(string(buf)), "_")[0]
 
     buf, err = c.One_cmd ("uci get productinfo.productinfo.production")
     if err != nil {
@@ -233,7 +221,7 @@ func (c *SSHClient) Is_oakridge_dev () (*Oakridge_Device) {
     }
     dev.HWmodel = strings.TrimSpace(string(buf))
 
-    buf, err = c.One_cmd ("uci get productinfo.productinfo.bootversion")
+    buf, err = c.One_cmd ("uci get productinfo.productinfo.swversion")
     if err != nil {
         return nil
     }
