@@ -7,7 +7,6 @@ import (
     "os"
     "io"
     "path"
-    "strings"
     "golang.org/x/crypto/ssh"
 )
 
@@ -31,73 +30,6 @@ func New_SSHClient (host string) SSHClient {
     }
 }
 
-type UBNT_AP struct {
-    Mac             string
-    IPv4            string
-    HWmodel         string
-    SWver           string
-}
-func (c *SSHClient) Is_ubnt_ap () (*UBNT_AP) {
-
-    if err := c.Open("ubnt", "ubnt"); err != nil {
-        return nil
-    }
-    defer c.Close()
-
-    var dev UBNT_AP
-
-    buf, err := c.One_cmd ("cat /proc/ubnthal/system.info")
-    if err != nil {
-        return nil
-    }
-    // pass output string to get mac and hwmodel
-    tvs := strings.Split (strings.TrimSpace(string(buf)), "\n")
-    for _, t:=range tvs {
-        switch v := strings.Split (t, "="); v[0] {
-        case "eth0.macaddr":
-            dev.Mac= v[1]
-        case "systemid":
-            switch v[1] {
-            case "e517":
-                dev.HWmodel=AC_LITE
-            case "e527":
-                dev.HWmodel=AC_LR
-            case "e537":
-                dev.HWmodel=AC_PRO
-            default:
-                // only support model above
-                return nil
-            }
-        }
-    }
-
-    // sw ver
-    buf, err = c.One_cmd ("cat /etc/version")
-    if err != nil {
-        return nil
-    }
-    dev.SWver= strings.TrimSpace(string(buf))
-    dev.IPv4 = c.IPv4
-    return &dev
-}
-func (d *UBNT_AP) OneLineSummary () string {
-    return fmt.Sprintf ("%-16s%-8s%-18s%-16s%s", "Ubiquiti", d.HWmodel, d.Mac, d.IPv4, d.SWver)
-}
-
-type Oakridge_Device struct {
-    Mac             string
-    HWvendor        string
-    HWmodel         string
-    IPv4            string
-    Firmware        string  // this is bootloader version
-}
-func Oakdev_PrintHeader () {
-    fmt.Printf ("\n%-4s%-16s%-8s%-18s%-16s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Firmware")
-    fmt.Printf ("%s\n", strings.Repeat("=",96))
-}
-func (d *Oakridge_Device) OneLineSummary () string {
-    return fmt.Sprintf ("%-16s%-8s%-18s%-16s%s", "Oakridge", d.HWmodel, d.Mac, d.IPv4, d.Firmware)
-}
 func Get_local_subnets() ([]string, []net.IP, error) {
     var subnets []string
     var selfs []net.IP
@@ -198,36 +130,6 @@ func (c *SSHClient) Close () {
         c.client.Close ()
         c.client = nil
     }
-}
-func (c *SSHClient) Is_oakridge_dev () (*Oakridge_Device) {
-
-    if err := c.Open("root", "oakridge"); err != nil {
-        return nil
-    }
-    defer c.Close()
-
-    var dev Oakridge_Device
-
-    // mac-addr
-    buf, err := c.One_cmd ("uci get productinfo.productinfo.mac")
-    if err != nil {
-        return nil
-    }
-    dev.Mac = strings.TrimSpace(string(buf))
-
-    buf, err = c.One_cmd ("uci get productinfo.productinfo.production")
-    if err != nil {
-        return nil
-    }
-    dev.HWmodel = strings.TrimSpace(string(buf))
-
-    buf, err = c.One_cmd ("uci get productinfo.productinfo.swversion")
-    if err != nil {
-        return nil
-    }
-    dev.Firmware = strings.TrimSpace(string(buf))
-    dev.IPv4 = c.IPv4
-    return &dev
 }
 func (c *SSHClient) Scp (local string, remote string, permission string) (int64,error) {
     f,err := os.Open(local)

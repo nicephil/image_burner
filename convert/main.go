@@ -34,12 +34,34 @@ var img = map[string][]string {
 }
 
 
+type UBNT_AP struct {
+    Mac             string
+    IPv4            string
+    HWmodel         string
+    SWver           string
+}
+func (d *UBNT_AP) OneLineSummary () string {
+    return fmt.Sprintf ("%-16s%-8s%-18s%-16s%s", "Ubiquiti", d.HWmodel, d.Mac, d.IPv4, d.SWver)
+}
+type Oakridge_Device struct {
+    Mac             string
+    HWmodel         string
+    IPv4            string
+    Firmware        string  // this is bootloader version
+}
+func (d *Oakridge_Device) OneLineSummary () string {
+    return fmt.Sprintf ("%-16s%-8s%-18s%-16s%s", "Oakridge", d.HWmodel, d.Mac, d.IPv4, d.Firmware)
+}
+func Oakdev_PrintHeader () {
+    fmt.Printf ("\n%-4s%-16s%-8s%-18s%-16s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Firmware")
+    fmt.Printf ("%s\n", strings.Repeat("=",96))
+}
 
 type Subnet struct {
     Net             string
     holes           []net.IP                        // skip those ip-addr
-    Oak_dev_list    []*oakUtility.Oakridge_Device
-    UBNT_ap_list    []*oakUtility.UBNT_AP
+    Oak_dev_list    []*Oakridge_Device
+    UBNT_ap_list    []*UBNT_AP
     batch           sync.WaitGroup                   // this to wait all host finish before exit
 }
 
@@ -76,9 +98,9 @@ func (s *Subnet) scan_one (host string) {
 
     c := oakUtility.New_SSHClient (host)
 
-    if dev := c.Is_oakridge_dev(); dev != nil {
+    if dev := Is_oakridge_dev(c); dev != nil {
             s.Oak_dev_list = append(s.Oak_dev_list, dev)
-    } else if dev := c.Is_ubnt_ap(); dev != nil {
+    } else if dev := Is_ubnt_ap(c); dev != nil {
             s.UBNT_ap_list = append(s.UBNT_ap_list, dev)
     }
 }
@@ -87,10 +109,85 @@ func (s *Subnet) OneLineSummary () {
     fmt.Printf("✓ %s: Completed, %d Oakridge, %d UBNT devices\n",s.Net,len(s.Oak_dev_list),len(s.UBNT_ap_list))
 }
 
+func Is_oakridge_dev (c oakUtility.SSHClient) (*Oakridge_Device) {
+
+    if err := c.Open("root", "oakridge"); err != nil {
+        return nil
+    }
+    defer c.Close()
+
+    var dev Oakridge_Device
+
+    // mac-addr
+    buf, err := c.One_cmd ("uci get productinfo.productinfo.mac")
+    if err != nil {
+        return nil
+    }
+    dev.Mac = strings.TrimSpace(string(buf))
+
+    buf, err = c.One_cmd ("uci get productinfo.productinfo.production")
+    if err != nil {
+        return nil
+    }
+    dev.HWmodel = strings.TrimSpace(string(buf))
+
+    buf, err = c.One_cmd ("uci get productinfo.productinfo.swversion")
+    if err != nil {
+        return nil
+    }
+    dev.Firmware = strings.TrimSpace(string(buf))
+    dev.IPv4 = c.IPv4
+    return &dev
+}
+func Is_ubnt_ap (c oakUtility.SSHClient) (*UBNT_AP) {
+
+    if err := c.Open("ubnt", "ubnt"); err != nil {
+        return nil
+    }
+    defer c.Close()
+
+    var dev UBNT_AP
+
+    buf, err := c.One_cmd ("cat /proc/ubnthal/system.info")
+    if err != nil {
+        return nil
+    }
+    // pass output string to get mac and hwmodel
+    tvs := strings.Split (strings.TrimSpace(string(buf)), "\n")
+    for _, t:=range tvs {
+        switch v := strings.Split (t, "="); v[0] {
+        case "eth0.macaddr":
+            dev.Mac= v[1]
+        case "systemid":
+            switch v[1] {
+            case "e517":
+                dev.HWmodel=AC_LITE
+            case "e527":
+                dev.HWmodel=AC_LR
+            case "e537":
+                dev.HWmodel=AC_PRO
+            default:
+                // only support model above
+                return nil
+            }
+        }
+    }
+
+    // sw ver
+    buf, err = c.One_cmd ("cat /etc/version")
+    if err != nil {
+        return nil
+    }
+    dev.SWver= strings.TrimSpace(string(buf))
+    dev.IPv4 = c.IPv4
+    return &dev
+}
+
+
 func list_scan_result () {
     cnt := 0
 
-    oakUtility.Oakdev_PrintHeader ()
+    Oakdev_PrintHeader ()
     for _,n:=range netlist {
         for _,o :=range n.Oak_dev_list {
             cnt++
