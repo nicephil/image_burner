@@ -285,6 +285,7 @@ func install_oak_firmwire () {
     }
 
     if len(targets) == 0 {
+        println("\nNo supported 3rd-party device found")
         return
     }
 
