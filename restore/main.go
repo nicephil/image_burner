@@ -3,6 +3,8 @@ package main
 import (
     "fmt"
     "os"
+    "bufio"
+    "strconv"
     "net"
     "strings"
     "sync"
@@ -27,10 +29,10 @@ var local_imgfile = map[string]string {
     AC_LR:   "",
     AC_PRO:  "",
 }
-var img = map[string][]string {
-    AC_LITE: {"oakridge.sysloader.ubnt.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-sysupgrade.bin.tar.gz"},
-    AC_LR:   {"oakridge.sysloader.ubnt.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-sysupgrade.bin.tar.gz"},
-    AC_PRO:  {"oakridge.sysloader.ubnt.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-sysupgrade.bin.tar.gz"},
+var img = map[string][]string { //NOTE these 3 are use same img
+    AC_LITE: {"ubnt.unifi.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/firmware.bin.tar.gz"},
+    AC_LR:   {"ubnt.unifi.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/firmware.bin.tar.gz"},
+    AC_PRO:  {"ubnt.unifi.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/firmware.bin.tar.gz"},
 }
 
 
@@ -144,10 +146,8 @@ func list_scan_result () {
 type Target struct {
     host        string
     mac         string
-    user        string
-    pass        string
-    Model     string
-    result      string
+    Model       string
+    SWver       string
 }
 
 func on_demand_download (t *Target) error {
@@ -156,7 +156,6 @@ func on_demand_download (t *Target) error {
         url := img[t.Model][1]
         if _, err := os.Stat(local); os.IsNotExist(err) {
             if err := oakUtility.DownloadFile (local, url, true, "Downloading "+t.Model+" img ... "); err != nil {
-                println ("Download fail:", err)
                 return err
             }
             fmt.Println("File download done")
@@ -167,34 +166,45 @@ func on_demand_download (t *Target) error {
     }
     return nil
 }
-func Install_img (t Target, s *sync.WaitGroup) {
-    defer s.Done()
+func write_mtd (t Target, s *sync.WaitGroup) {
+    if s != nil {
+        defer s.Done()
+    }
 
-    p := spinner.StartNew("Install "+t.host+" ...")
+    switch t.Model {
+    case AC_LITE, AC_LR, AC_PRO:
+         if err := on_demand_download (&t); err != nil {
+            println (err.Error())
+            return
+         }
+    default:
+        fmt.Printf ("unsupport model %s\n", t.Model)
+        return
+    }
+
+    p := spinner.StartNew("Restore "+t.host+" ...")
+    defer p.Stop ()
 
     c := oakUtility.New_SSHClient (t.host)
-    if err := c.Open(t.user, t.pass); err != nil {
+    if err := c.Open("root", "oakridge"); err != nil {
         println (err)
         return
     }
     defer c.Close()
 
-    remotefile := "oakridge.tar.gz"
+    remotefile := "oak.tar.gz"
     _,err := c.Scp (local_imgfile[t.Model], remotefile, "0644")
     if err != nil {
         println (err)
         return
     }
 
-    fmt.Printf ("Upgrade %s image, MUST NOT POWER OFF DEVICE ...\n", t.host)
+    fmt.Printf ("\nUpgrade %s image, MUST NOT POWER OFF DEVICE ...\n", t.host)
 
     var cmds = []string {
     "tar xzf "+remotefile,
     "rm -rvf "+remotefile,
-    "dd if=openwrt-ar71xx-generic-ubnt-unifi-squashfs-sysupgrade.bin of=kernel0.bin bs=7929856 count=1",
-    "dd if=openwrt-ar71xx-generic-ubnt-unifi-squashfs-sysupgrade.bin of=kernel1.bin bs=7929856 count=1 skip=1",
-    "mtd write kernel0.bin kernel0",
-    "mtd write kernel1.bin kernel1",
+    "mtd write firmwire.bin firmware"
     "reboot",
     }
     for _, cmd := range cmds {
@@ -204,8 +214,66 @@ func Install_img (t Target, s *sync.WaitGroup) {
             return
         }
     }
-    p.Stop ()
-    fmt.Printf ("%s Image upgraded, rebooting ...\n", t.host)
+}
+func choose_restore_firmwire () {
+    var targets []Target
+
+    // prepare the list
+    for _,n:=range netlist {
+        for _,d :=range n.Oak_dev_list {
+            switch d.Model {
+            case AC_LITE, AC_LR, AC_PRO:
+                t := Target { host: d.IPv4, mac: d.Mac, Model: d.Model, SWver: d.Firmware}
+                targets = append(targets, t)
+            }
+        }
+    }
+
+    if len(targets) == 0 {
+        println("\nNo supported 3rd-party devices found")
+        return
+    }
+
+    var choice int
+    for {
+        println("\nChoose which device to restore(ctrl-C to exist):")
+        println("[0]. All devices")
+        for i,d := range targets {
+            fmt.Printf("[%d]. %s %s %s %s\n", i+1, d.host, d.mac, d.Model, d.SWver)
+        }
+
+        fmt.Printf("Please choose: %d\n", choice)
+        r := bufio.NewReader (os.Stdin)
+        input,err := r.ReadString ('\n')
+        if err != nil {
+            println (err.Error())
+            continue
+        }
+
+        if choice, err = strconv.Atoi(strings.TrimSpace(input)); err != nil {
+            println (err.Error())
+            continue
+        }
+
+        if choice >= 0 && choice <= len(targets) {
+            oakUtility.ClearLine ()
+            fmt.Printf("You choose: %d\n", choice)
+            break
+        }
+
+        fmt.Printf("Invalid choicse: %d\n", choice)
+    }
+
+    if choice == 0 {
+        var s sync.WaitGroup
+        for _, t:= range targets {
+            s.Add (1)
+            go write_mtd (t, &s)
+        }
+        s.Wait()
+    } else {
+        write_mtd (targets[choice-1], nil)
+    }
 }
 func scan_local_subnet () {
     nets, selfs, err := oakUtility.Get_local_subnets()
@@ -237,6 +305,8 @@ func main() {
     scan_local_subnet ()
 
     list_scan_result ()
+
+    choose_restore_firmwire ()
 
     //list_oakdev_csv ()
 

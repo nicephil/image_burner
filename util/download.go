@@ -34,7 +34,7 @@ func (wc WriteCounter) PrintProgress() {
 
 	// Return again and print current status of download
 	// We use the humanize package to print the bytes in a meaningful way (e.g. 10 MB)
-	fmt.Printf("\r%s%s (%s)", wc.Prefix_txt, humanize.Bytes(wc.Total), wc.Total)
+	fmt.Printf("\r%s%s (%d)", wc.Prefix_txt, humanize.Bytes(wc.Total), wc.Total)
 }
 
 
