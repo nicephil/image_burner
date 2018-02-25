@@ -204,7 +204,7 @@ func write_mtd (t Target, s *sync.WaitGroup) {
     var cmds = []string {
     "tar xzf "+remotefile,
     "rm -rvf "+remotefile,
-    "mtd write firmwire.bin firmware"
+    "mtd write firmwire.bin firmware",
     "reboot",
     }
     for _, cmd := range cmds {
