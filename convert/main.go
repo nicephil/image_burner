@@ -268,7 +268,7 @@ func Install_img (t Target, s *sync.WaitGroup) {
     for _, cmd := range cmds {
         _, err := c.One_cmd (cmd)
         if err != nil {
-            println (err)
+            fmt.Printf ("%s: %s\n", cmd,err.Error())
             return
         }
     }
