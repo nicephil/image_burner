@@ -5,6 +5,8 @@ import (
     "os"
     "net"
     "strings"
+    "bufio"
+    "strconv"
     "sync"
     "image_burner/util"
     "image_burner/spinner"
@@ -209,12 +211,12 @@ type Target struct {
     result      string
 }
 
-func on_demand_download (t *Target) error {
-    if local_imgfile[t.HWmodel] == "" {
-        local := img[t.HWmodel][0]
-        url := img[t.HWmodel][1]
+func on_demand_download (model string) error {
+    if local_imgfile[model] == "" {
+        local := img[model][0]
+        url := img[model][1]
         if _, err := os.Stat(local); os.IsNotExist(err) {
-            if err := oakUtility.DownloadFile (local, url, true, "Downloading "+t.HWmodel+" img ... "); err != nil {
+            if err := oakUtility.DownloadFile (local, url, true, "Downloading "+model+" img ... "); err != nil {
                 println ("Download fail:", err)
                 return err
             }
@@ -222,23 +224,30 @@ func on_demand_download (t *Target) error {
         } else {
             fmt.Printf("%s exist, skip download(TODO:check file checksum)\n", local)
         }
-        local_imgfile[t.HWmodel] = local
+        local_imgfile[model] = local
     }
     return nil
 }
 func Install_img (t Target, s *sync.WaitGroup) {
-    defer s.Done()
+    if s != nil {
+        defer s.Done()
+    }
+
+    if err := on_demand_download (t.HWmodel); err != nil {
+        fmt.Printf ("on-demand-download img fail: %s\n", err.Error())
+        return
+    }
 
     p := spinner.StartNew("Install "+t.host+" ...")
 
     c := oakUtility.New_SSHClient (t.host)
     if err := c.Open(t.user, t.pass); err != nil {
-        println (err)
+        fmt.Printf ("ssh %s: %s\n", t.host, err.Error())
         return
     }
     defer c.Close()
 
-    remotefile := "oakridge.tar.gz"
+    remotefile := "/tmp/oakridge.tar.gz"
     _,err := c.Scp (local_imgfile[t.HWmodel], remotefile, "0644")
     if err != nil {
         println (err)
@@ -248,12 +257,12 @@ func Install_img (t Target, s *sync.WaitGroup) {
     fmt.Printf ("Upgrade %s image, MUST NOT POWER OFF DEVICE ...\n", t.host)
 
     var cmds = []string {
-    "tar xzf "+remotefile,
+    "tar xzf "+remotefile+" -C /tmp",
     "rm -rvf "+remotefile,
-    "dd if=openwrt-ar71xx-generic-ubnt-unifi-squashfs-sysupgrade.bin of=kernel0.bin bs=7929856 count=1",
-    "dd if=openwrt-ar71xx-generic-ubnt-unifi-squashfs-sysupgrade.bin of=kernel1.bin bs=7929856 count=1 skip=1",
-    "mtd write kernel0.bin kernel0",
-    "mtd write kernel1.bin kernel1",
+    "dd if=/tmp/openwrt-ar71xx-generic-ubnt-unifi-squashfs-sysupgrade.bin of=/tmp/kernel0.bin bs=7929856 count=1",
+    "dd if=/tmp/openwrt-ar71xx-generic-ubnt-unifi-squashfs-sysupgrade.bin of=/tmp/kernel1.bin bs=7929856 count=1 skip=1",
+    "mtd write /tmp/kernel0.bin kernel0",
+    "mtd write /tmp/kernel1.bin kernel1",
     "reboot",
     }
     for _, cmd := range cmds {
@@ -267,7 +276,6 @@ func Install_img (t Target, s *sync.WaitGroup) {
     fmt.Printf ("%s Image upgraded, rebooting ...\n", t.host)
 }
 func install_oak_firmwire () {
-    var choice string
     var targets []Target
 
     // prepare the list
@@ -276,9 +284,6 @@ func install_oak_firmwire () {
             switch u.HWmodel {
             case AC_LITE, AC_LR, AC_PRO:
                 t := Target { host: u.IPv4, mac: u.Mac, user: "ubnt", pass: "ubnt", HWmodel: u.HWmodel}
-                if err := on_demand_download (&t); err != nil {
-                    continue
-                }
                 targets = append(targets, t)
             }
         }
@@ -289,21 +294,46 @@ func install_oak_firmwire () {
         return
     }
 
-    println("\nInstall Oakridge firmware to all 3rd party HW?(Y/N):")
-    fmt.Scanf("%s\n", &choice)
-    fmt.Printf("\rYou choose: %s\n", choice)
-    oakUtility.ClearLine ()
-    if strings.Compare(strings.ToUpper(choice), "Y") != 0 {
-        return
+    var choice int
+    for {
+        println("\nChoose which device to restore(ctrl-C to exist):")
+        println("[0]. All devices")
+        for i,d := range targets {
+            fmt.Printf("[%d]. %s %s %s\n", i+1, d.host, d.mac, d.HWmodel)
+        }
+
+        fmt.Printf("Please choose: [0~%d]\n", len(targets))
+        r := bufio.NewReader (os.Stdin)
+        input,err := r.ReadString ('\n')
+        if err != nil {
+            println (err.Error())
+            continue
+        }
+
+        if choice, err = strconv.Atoi(strings.TrimSpace(input)); err != nil {
+            println (err.Error())
+            continue
+        }
+
+        if choice >= 0 && choice <= len(targets) {
+            oakUtility.ClearLine ()
+            fmt.Printf("You choose: %d\n", choice)
+            break
+        }
+
+        fmt.Printf("Invalid choicse: %d\n", choice)
     }
 
-    // burn img in parallel
-    var s sync.WaitGroup
-    for _, t:= range targets {
-        s.Add (1)
-        go Install_img(t, &s)
+    if choice == 0 {
+        var s sync.WaitGroup
+        for _, t:= range targets {
+            s.Add (1)
+            go Install_img(t, &s)
+        }
+        s.Wait()
+    } else {
+        Install_img (targets[choice-1], nil)
     }
-    s.Wait()
 }
 
 

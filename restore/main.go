@@ -192,7 +192,7 @@ func write_mtd (t Target, s *sync.WaitGroup) {
     }
     defer c.Close()
 
-    remotefile := "oak.tar.gz"
+    remotefile := "/tmp/oak.tar.gz"
     _,err := c.Scp (local_imgfile[t.Model], remotefile, "0644")
     if err != nil {
         println (err)
@@ -202,15 +202,15 @@ func write_mtd (t Target, s *sync.WaitGroup) {
     fmt.Printf ("\nUpgrade %s image, MUST NOT POWER OFF DEVICE ...\n", t.host)
 
     var cmds = []string {
-    "tar xzf "+remotefile,
+    "tar xzf "+remotefile+" -C /tmp",
     "rm -rvf "+remotefile,
-    "mtd write firmwire.bin firmware",
+    "mtd write /tmp/firmware.bin firmware",
     "reboot",
     }
     for _, cmd := range cmds {
         _, err := c.One_cmd (cmd)
         if err != nil {
-            println (err)
+            fmt.Printf ("\n%s: %s\n",cmd, err.Error())
             return
         }
     }
@@ -242,7 +242,7 @@ func choose_restore_firmwire () {
             fmt.Printf("[%d]. %s %s %s %s\n", i+1, d.host, d.mac, d.Model, d.SWver)
         }
 
-        fmt.Printf("Please choose: %d\n", choice)
+        fmt.Printf("Please choose: [0~%d]\n", len(targets))
         r := bufio.NewReader (os.Stdin)
         input,err := r.ReadString ('\n')
         if err != nil {
