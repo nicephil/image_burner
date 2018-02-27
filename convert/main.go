@@ -43,7 +43,7 @@ type UBNT_AP struct {
     SWver           string
 }
 func (d *UBNT_AP) OneLineSummary () string {
-    return fmt.Sprintf ("%-16s%-8s%-18s%-16s%s", "Ubiquiti", d.HWmodel, d.Mac, d.IPv4, d.SWver)
+    return fmt.Sprintf ("%-12s%-16s%-18s%-16s%s", "Ubiquiti", d.HWmodel, d.Mac, d.IPv4, d.SWver)
 }
 type Oakridge_Device struct {
     Mac             string
@@ -52,7 +52,7 @@ type Oakridge_Device struct {
     Firmware        string  // this is bootloader version
 }
 func (d *Oakridge_Device) OneLineSummary () string {
-    return fmt.Sprintf ("%-16s%-8s%-18s%-16s%s", "Oakridge", d.HWmodel, d.Mac, d.IPv4, d.Firmware)
+    return fmt.Sprintf ("%-12s%-16s%-18s%-16s%s", "Oakridge", d.HWmodel, d.Mac, d.IPv4, d.Firmware)
 }
 func Oakdev_PrintHeader () {
     fmt.Printf ("\n%-4s%-16s%-8s%-18s%-16s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Firmware")
@@ -134,10 +134,17 @@ func Is_oakridge_dev (c oakUtility.SSHClient) (*Oakridge_Device) {
     dev.HWmodel = strings.TrimSpace(string(buf))
 
     buf, err = c.One_cmd ("uci get productinfo.productinfo.swversion")
-    if err != nil {
-        return nil
+    if err == nil {
+        dev.Firmware = strings.TrimSpace(string(buf))
     }
-    dev.Firmware = strings.TrimSpace(string(buf))
+
+    // only try get bootversion if can't get swversion
+    if dev.Firmware == "" {
+        buf, err = c.One_cmd ("uci get productinfo.productinfo.bootversion")
+        if err != nil {
+            return nil
+        }
+    }
     dev.IPv4 = c.IPv4
     return &dev
 }
