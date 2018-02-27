@@ -43,10 +43,10 @@ type Oakridge_Device struct {
     Firmware        string
 }
 func (d *Oakridge_Device) OneLineSummary () string {
-    return fmt.Sprintf ("%-16s%-8s%-18s%-16s%s", "Oakridge", d.Model, d.Mac, d.IPv4, d.Firmware)
+    return fmt.Sprintf ("%-12s%-16s%-18s%-16s%s", "Oakridge", d.Model, d.Mac, d.IPv4, d.Firmware)
 }
 func Oakdev_PrintHeader () {
-    fmt.Printf ("\n%-4s%-16s%-8s%-18s%-16s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Firmware")
+    fmt.Printf ("\n%-4s%-12s%-16s%-18s%-16s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Firmware")
     fmt.Printf ("%s\n", strings.Repeat("=",96))
 }
 
@@ -102,6 +102,7 @@ func (s *Subnet) OneLineSummary () {
 func Is_oakridge_dev (c oakUtility.SSHClient) (*Oakridge_Device) {
 
     if err := c.Open("root", "oakridge"); err != nil {
+        log.Debug.Printf ("fail login as root to %s\n",c.IPv4)
         return nil
     }
     defer c.Close()
@@ -111,21 +112,35 @@ func Is_oakridge_dev (c oakUtility.SSHClient) (*Oakridge_Device) {
     // mac-addr
     buf, err := c.One_cmd ("uci get productinfo.productinfo.mac")
     if err != nil {
+        log.Debug.Printf ("uci get productinfo.productinfo.mac: %s\n", err.Error())
         return nil
     }
     dev.Mac = strings.TrimSpace(string(buf))
 
     buf, err = c.One_cmd ("uci get productinfo.productinfo.production")
     if err != nil {
+        log.Debug.Printf ("uci get productinfo.productinfo.production: %s\n", err.Error())
         return nil
     }
     dev.Model = strings.TrimSpace(string(buf))
 
     buf, err = c.One_cmd ("uci get productinfo.productinfo.swversion")
     if err != nil {
-        return nil
+        log.Debug.Printf ("uci get productinfo.productinfo.swversion: %s\n", err.Error())
+    } else {
+        dev.Firmware = strings.TrimSpace(string(buf))
     }
-    dev.Firmware = strings.TrimSpace(string(buf))
+
+    // only try get bootversion if can't get swversion
+    if dev.Firmware == "" {
+        buf, err = c.One_cmd ("uci get productinfo.productinfo.bootversion")
+        if err != nil {
+            log.Debug.Printf ("uci get productinfo.productinfo.swversion: %s\n", err.Error())
+            return nil
+        }
+        dev.Firmware = strings.TrimSpace(string(buf))
+    }
+
     dev.IPv4 = c.IPv4
     return &dev
 }
