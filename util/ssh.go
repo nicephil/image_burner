@@ -87,7 +87,11 @@ func Net2hosts_exclude (cidr string, ex []net.IP) ([]string, error) {
         ips = append(ips, ip.String())
     }
     // remove network address and broadcast address
-    return ips[1 : len(ips)-1], nil
+    if len(ips) <= 2 {
+        return ips, nil
+    } else {
+        return ips[1 : len(ips)-1], nil
+    }
 }
 
 

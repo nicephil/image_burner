@@ -237,12 +237,18 @@ func choose_restore_firmwire () {
     var choice int
     for {
         println("\nChoose which device to restore(ctrl-C to exist):")
-        println("[0]. All devices")
+        if len(targets) > 1 {
+            println("[0]. All devices")
+        }
         for i,d := range targets {
             fmt.Printf("[%d]. %s %s %s %s\n", i+1, d.host, d.mac, d.Model, d.SWver)
         }
 
-        fmt.Printf("Please choose: [0~%d]\n", len(targets))
+        if len(targets) > 1 {
+            fmt.Printf("Please choose: [0~%d]\n", len(targets))
+        } else {
+            fmt.Printf("Please choose: [%d]\n", len(targets))
+        }
         r := bufio.NewReader (os.Stdin)
         input,err := r.ReadString ('\n')
         if err != nil {
@@ -293,6 +299,27 @@ func scan_local_subnet () {
     }
 }
 
+func scan_input_subnet (args []string) {
+    var nets []string
+    for _,arg := range args {
+        _, ipnet, err := net.ParseCIDR (arg)
+        if err != nil {
+            log.Error.Fatalln(err)
+        }
+        nets = append (nets,ipnet.String())
+    }
+
+    println("Scanning user input networks ...\n")
+
+    // scan each subnet
+    for _, net := range nets {
+        n := New_Subnet (net)
+        n.Scan ()
+        n.OneLineSummary()
+        netlist =  append(netlist, n)
+    }
+}
+
 func init () {
     log = oakUtility.New_OakLogger()
     log.Set_level ("info")
@@ -302,7 +329,11 @@ func main() {
 
     println(Banner_start)
 
-    scan_local_subnet ()
+    if len(os.Args) > 1 {
+        scan_input_subnet (os.Args[1:])
+    } else {
+        scan_local_subnet ()
+    }
 
     list_scan_result ()
 
