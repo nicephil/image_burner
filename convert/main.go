@@ -355,6 +355,27 @@ func scan_local_subnet () {
     }
 }
 
+func scan_input_subnet (args []string) {
+    var nets []string
+    for _,arg := range args {
+        _, ipnet, err := net.ParseCIDR (arg)
+        if err != nil {
+            log.Error.Fatalln(err)
+        }
+        nets = append (nets,ipnet.String())
+    }
+
+    println("Scanning user input networks ...\n")
+
+    // scan each subnet
+    for _, net := range nets {
+        n := New_Subnet (net)
+        n.Scan ()
+        n.OneLineSummary()
+        netlist =  append(netlist, n)
+    }
+}
+
 func init () {
     log = oakUtility.New_OakLogger()
     log.Set_level ("info")
@@ -364,7 +385,11 @@ func main() {
 
     println(Banner_start)
 
-    scan_local_subnet ()
+    if len(os.Args) > 1 {
+        scan_input_subnet (os.Args[1:])
+    } else {
+        scan_local_subnet ()
+    }
 
     list_scan_result ()
 
