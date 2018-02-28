@@ -338,6 +338,7 @@ func restore_unifi_ap (t Target) {
             return
         }
     }
+    fmt.Printf ("\n%s restored to factory image\n", t.host)
 }
 func choose_restore_firmwire () {
     var targets []Target
