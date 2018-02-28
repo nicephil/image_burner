@@ -36,7 +36,7 @@ func NewSpinner(title string) *Spinner {
 		FrameRate: DEFAULT_FRAME_RATE,
 		runChan:   make(chan struct{}),
 	}
-	if !terminal.IsTerminal(syscall.Stdout) {
+	if !terminal.IsTerminal(int(syscall.Stdout)) {
 		sp.NoTty = true
 	}
 	return sp
