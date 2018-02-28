@@ -111,18 +111,21 @@ func Is_oakridge_dev (c oakUtility.SSHClient) (*Oakridge_Device) {
     // mac-addr
     buf, err := c.One_cmd ("uci get productinfo.productinfo.mac")
     if err != nil {
+        log.Debug.Printf("uci get productinfo.productinfo.mac: %s %s\n", c.IPv4, err.Error())
         return nil
     }
     dev.Mac = strings.TrimSpace(string(buf))
 
     buf, err = c.One_cmd ("uci get productinfo.productinfo.production")
     if err != nil {
+        log.Debug.Printf("uci get productinfo.productinfo.production: %s\n", err.Error())
         return nil
     }
     dev.Model = strings.TrimSpace(string(buf))
 
     buf, err = c.One_cmd ("uci get productinfo.productinfo.swversion")
     if err != nil {
+        log.Debug.Printf("uci get productinfo.productinfo.swversion: %s\n", err.Error())
         return nil
     }
     dev.Firmware = strings.TrimSpace(string(buf))
@@ -199,7 +202,7 @@ func write_mtd (t Target, s *sync.WaitGroup) {
         return
     }
 
-    fmt.Printf ("\nUpgrade %s image, MUST NOT POWER OFF DEVICE ...\n", t.host)
+    fmt.Printf ("\nRestore %s image, MUST NOT POWER OFF DEVICE ...\n", t.host)
 
     var cmds = []string {
     "tar xzf "+remotefile+" -C /tmp",
@@ -214,6 +217,7 @@ func write_mtd (t Target, s *sync.WaitGroup) {
             return
         }
     }
+    fmt.Printf ("\n%s restored to factory image\n", t.host)
 }
 func choose_restore_firmwire () {
     var targets []Target
