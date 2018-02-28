@@ -392,7 +392,7 @@ func install_unifi_ap_img (t Target) {
         return
     }
 
-    fmt.Printf ("Upgrade %s image, MUST NOT POWER OFF DEVICE ...\n", t.host)
+    fmt.Printf ("MUST NOT POWER OFF, it might take several minutes!\n")
 
     var cmds = []string {
     "tar xzf "+remotefile+" -C /tmp",
