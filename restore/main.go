@@ -2,6 +2,7 @@ package main
 
 import (
     "fmt"
+    "time"
     "os"
     "bufio"
     "strconv"
@@ -10,6 +11,7 @@ import (
     "sync"
     "image_burner/util"
     "image_burner/spinner"
+    "image_burner/ping"
 )
 
 /*
@@ -24,17 +26,13 @@ var log oakUtility.OakLogger
 const AC_LITE = oakUtility.AC_LITE
 const AC_LR   = oakUtility.AC_LR
 const AC_PRO  = oakUtility.AC_PRO
+const UBNT_ERX  = "EdgeRouter_ER-X"
+const UBNT_ERX_OLD  = oakUtility.UBNT_ERX_OLD
 var local_imgfile = map[string]string {
     AC_LITE: "",
     AC_LR:   "",
     AC_PRO:  "",
 }
-var img = map[string][]string { //NOTE these 3 are use same img
-    AC_LITE: {"ubnt.unifi.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/firmware.bin.tar.gz"},
-    AC_LR:   {"ubnt.unifi.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/firmware.bin.tar.gz"},
-    AC_PRO:  {"ubnt.unifi.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/firmware.bin.tar.gz"},
-}
-
 
 type Oakridge_Device struct {
     Mac             string
@@ -46,7 +44,7 @@ func (d *Oakridge_Device) OneLineSummary () string {
     return fmt.Sprintf ("%-12s%-16s%-18s%-16s%s", "Oakridge", d.Model, d.Mac, d.IPv4, d.Firmware)
 }
 func Oakdev_PrintHeader () {
-    fmt.Printf ("\n%-4s%-12s%-16s%-18s%-16s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Firmware")
+    fmt.Printf ("\n%-4s %-12s%-16s%-18s%-16s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Firmware")
     fmt.Printf ("%s\n", strings.Repeat("=",96))
 }
 
@@ -112,7 +110,7 @@ func Is_oakridge_dev (c oakUtility.SSHClient) (*Oakridge_Device) {
     // mac-addr
     buf, err := c.One_cmd ("uci get productinfo.productinfo.mac")
     if err != nil {
-        log.Debug.Printf ("uci get productinfo.productinfo.mac: %s\n", err.Error())
+        log.Debug.Printf ("uci get productinfo.productinfo.mac: %s %s\n", c.IPv4, err.Error())
         return nil
     }
     dev.Mac = strings.TrimSpace(string(buf))
@@ -153,7 +151,12 @@ func list_scan_result () {
     for _,n:=range netlist {
         for _,o :=range n.Oak_dev_list {
             cnt++
-            fmt.Printf("%-3d %s\n", cnt, o.OneLineSummary())
+            switch o.Model {
+            case AC_LITE,AC_LR,AC_PRO,UBNT_ERX:
+                fmt.Printf("✓%-3d %s\n", cnt, o.OneLineSummary())
+            default:
+                fmt.Printf(" %-3d %s\n", cnt, o.OneLineSummary())
+            }
         }
     }
 }
@@ -165,35 +168,141 @@ type Target struct {
     SWver       string
 }
 
-func on_demand_download (t *Target) error {
-    if local_imgfile[t.Model] == "" {
-        local := img[t.Model][0]
-        url := img[t.Model][1]
-        if _, err := os.Stat(local); os.IsNotExist(err) {
-            if err := oakUtility.DownloadFile (local, url, true, "Downloading "+t.Model+" img ... "); err != nil {
-                return err
-            }
-            fmt.Println("File download done")
-        } else {
-            fmt.Printf("%s exist, skip download(TODO:check file checksum)\n", local)
-        }
-        local_imgfile[t.Model] = local
+
+var erx_imgs = map[string][]string {
+    "recover":      {"erx_recover.tar.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubnterx/origin/recover-ubnt-erx.tar.tar.gz"},
+    "squash":       {"erx_squashfs.tmp",       "http://image.oakridge.vip:8000/images/ap/ubnterx/origin/squashfs.tmp"},
+    "squash_md5":   {"erx_squashfs.tmp.md5",   "http://image.oakridge.vip:8000/images/ap/ubnterx/origin/squashfs.tmp.md5"},
+    "version":      {"erx_version.tmp",        "http://image.oakridge.vip:8000/images/ap/ubnterx/origin/version.tmp"},
+    "vmlinux":      {"erx_vmlinux.tmp",        "http://image.oakridge.vip:8000/images/ap/ubnterx/origin/vmlinux.tmp"},
+}
+func ubnt_recover_img (host string, file string) error {
+
+    p := spinner.StartNew("Install recover img ...")
+    defer p.Stop ()
+
+    c := oakUtility.New_SSHClient (host)
+    if err := c.Open("root", "oakridge"); err != nil {
+        return err
     }
+    defer c.Close()
+    if _,err := c.Scp (file, "/tmp/"+file, "0644"); err != nil {
+        return err
+    }
+    log.Debug.Printf ("done scp %s to %s:%s\n", file, host, "/tmp/"+file)
+    if _, err := c.One_cmd ("tar xzf /tmp/"+file+" -C /tmp"); err != nil {
+        return err
+    }
+    log.Debug.Printf ("done untar %s:%s\n", host, "/tmp/"+file)
+    //last cmd expect return err
+    log.Debug.Printf ("sysupgrade -n /tmp/recovery-ubnt-erx.tar")
+    c.One_cmd ("sysupgrade -n /tmp/recovery-ubnt-erx.tar")
     return nil
 }
-func write_mtd (t Target, s *sync.WaitGroup) {
+func restore_ubnt_erx (host string) {
+
+    log.Debug.Printf ("Start restore %s\n", host)
+
+    for _,v := range erx_imgs {                                             // download resource
+        if err := oakUtility.On_demand_download (v[0],v[1]); err != nil {
+            log.Error.Println (err.Error())
+            return
+        }
+    }
+
+    if err := ubnt_recover_img (host, erx_imgs["recover"][0]); err != nil {       // recover img and reboot
+            log.Error.Println (err.Error())
+            return
+    }
+
+    p := spinner.StartNew("Wait device bootup ...")
+
+    pinger, err := ping.NewPinger(host)
+    if err != nil {
+        panic(err)
+    }
+    pinger.SetStopAfter (5)
+    pinger.OnRecv = func(pkt *ping.Packet) {
+        fmt.Printf("%d bytes from %s: icmp_seq=%d time=%v\n", pkt.Nbytes, pkt.IPAddr, pkt.Seq, pkt.Rtt)
+    }
+    pinger.Run()
+    p.Stop ()
+
+    p = spinner.StartNew("Restoring factory img ...")
+    defer p.Stop ()
+    c := oakUtility.New_SSHClient (host)                                    // ssh back to device again
+    for {
+        time.Sleep(1*time.Second)
+        err := c.Open("root", "oakridge")
+        if err == nil {
+            log.Debug.Printf ("ssh connected to %s\n", host)
+            break;
+        }
+        log.Debug.Println (err.Error())
+    }
+    defer c.Close()
+
+    for k,v := range erx_imgs {                                             // scp other file to device
+        if k == "recover" {
+            continue
+        }
+        if _,err := c.Scp (v[0], "/tmp/"+v[0], "0644"); err != nil {
+            println (err)
+            return
+        }
+        log.Debug.Printf ("done scp %s to %s:%s\n", v[0], host, "/tmp/"+v[0])
+    }
+    var cmds = []string {
+    "ubidetach -m 5",
+    "ubiformat /dev/mtd5",
+    "ubiattach -p /dev/mtd5",
+    "ubimkvol /dev/ubi0 --vol_id=0 --lebs=1925 --name=troot",
+    "mount -o sync -t ubifs ubi0:troot /mnt",
+    "mtd write /tmp/"+erx_imgs["vmlinux"][0]+" kernel1",
+    "mtd write /tmp/"+erx_imgs["vmlinux"][0]+" kernel2",
+    "cp /tmp/"+erx_imgs["version"][0]+" /mnt/version",
+    "cp /tmp/"+erx_imgs["squash"][0]+" /mnt/squashfs.img",
+    "cp /tmp/"+erx_imgs["squash_md5"][0]+" /mnt/squashfs.img.md5",
+    "reboot",
+    }
+    for _, cmd := range cmds {
+        log.Debug.Printf ("%s ...\n", cmd)
+        _, err := c.One_cmd (cmd)
+        if err != nil {
+            log.Error.Printf ("\n%s: %s\n",cmd, err.Error())
+            return
+        }
+    }
+    fmt.Printf ("\nDevice restored to factory image successfully\n")
+}
+func restore_one_device (t Target, s *sync.WaitGroup) {
     if s != nil {
         defer s.Done()
     }
 
     switch t.Model {
     case AC_LITE, AC_LR, AC_PRO:
-         if err := on_demand_download (&t); err != nil {
-            println (err.Error())
-            return
-         }
+        restore_unifi_ap (t)
+    case UBNT_ERX,UBNT_ERX_OLD:
+        restore_ubnt_erx (t.host)
     default:
         fmt.Printf ("unsupport model %s\n", t.Model)
+        return
+    }
+}
+
+var unifi_ap_imgs = map[string][]string { //NOTE these 3 are use same img
+    AC_LITE: {"ubnt.unifi.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/firmware.bin.tar.gz"},
+    AC_LR:   {"ubnt.unifi.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/firmware.bin.tar.gz"},
+    AC_PRO:  {"ubnt.unifi.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/firmware.bin.tar.gz"},
+}
+func restore_unifi_ap (t Target) {
+
+    localfile := unifi_ap_imgs[t.Model][0]
+    url := unifi_ap_imgs[t.Model][1]
+
+    if err := oakUtility.On_demand_download (localfile, url); err != nil {
+        log.Error.Println(err.Error())
         return
     }
 
@@ -208,13 +317,13 @@ func write_mtd (t Target, s *sync.WaitGroup) {
     defer c.Close()
 
     remotefile := "/tmp/oak.tar.gz"
-    _,err := c.Scp (local_imgfile[t.Model], remotefile, "0644")
+    _,err := c.Scp (localfile, remotefile, "0644")
     if err != nil {
         println (err)
         return
     }
 
-    fmt.Printf ("\nUpgrade %s image, MUST NOT POWER OFF DEVICE ...\n", t.host)
+    fmt.Printf ("MUST NOT POWER OFF, it might take several minutes!\n")
 
     var cmds = []string {
     "tar xzf "+remotefile+" -C /tmp",
@@ -236,8 +345,9 @@ func choose_restore_firmwire () {
     // prepare the list
     for _,n:=range netlist {
         for _,d :=range n.Oak_dev_list {
+            log.Debug.Printf("%v\n",d)
             switch d.Model {
-            case AC_LITE, AC_LR, AC_PRO:
+            case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD:
                 t := Target { host: d.IPv4, mac: d.Mac, Model: d.Model, SWver: d.Firmware}
                 targets = append(targets, t)
             }
@@ -289,11 +399,11 @@ func choose_restore_firmwire () {
         var s sync.WaitGroup
         for _, t:= range targets {
             s.Add (1)
-            go write_mtd (t, &s)
+            go restore_one_device (t, &s)
         }
         s.Wait()
     } else {
-        write_mtd (targets[choice-1], nil)
+        restore_one_device (targets[choice-1], nil)
     }
 }
 func scan_local_subnet () {
