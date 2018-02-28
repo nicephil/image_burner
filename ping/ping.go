@@ -90,7 +90,7 @@ func NewPinger(addr string) (*Pinger, error) {
 		Interval: time.Second,
 		Timeout:  time.Second * 100000,
 		Count:    -1,
-		stop_on_1st:    false,
+		stop_after_cnt:    0xffffffff,
 
 		network: "udp",
 		ipv4:    ipv4,
@@ -117,7 +117,8 @@ type Pinger struct {
 	// Debug runs in debug mode
 	Debug bool
 
-        stop_on_1st bool
+        // stop after how many reply
+        stop_after_cnt uint32
 
 	// Number of packets sent
 	PacketsSent int
@@ -202,8 +203,8 @@ type Statistics struct {
 	StdDevRtt time.Duration
 }
 
-func (p *Pinger) SetStopOn1st (s bool) {
-    p.stop_on_1st = s
+func (p *Pinger) SetStopAfter (cnt uint32) {
+    p.stop_after_cnt = cnt
 }
 
 // SetIPAddr sets the ip address of the target host.
@@ -456,7 +457,8 @@ func (p *Pinger) processPacket(recv *packet) error {
 		handler(outPkt)
 	}
 
-        if p.stop_on_1st == true {
+        p.stop_after_cnt --
+        if p.stop_after_cnt == 0 {
 	    close(p.done)
         }
 	return nil

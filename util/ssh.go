@@ -14,6 +14,8 @@ const (
     AC_LITE = "AC-LITE"
     AC_LR   = "AC-LR"
     AC_PRO  = "AC-PRO"
+    UBNT_ERX = "UBNT_ERX"
+    UBNT_ERX_OLD = "ubnterx"
 )
 
 type SSHClient struct {
@@ -21,12 +23,14 @@ type SSHClient struct {
     Port        string
     User        string
     Pass        string
+    timeout_sec time.Duration
     client      *ssh.Client
 }
 func New_SSHClient (host string) SSHClient {
     return SSHClient {
         IPv4: host,
         Port: "22",     // default port to 22
+        timeout_sec: time.Second*3, // default timeout 3 second
     }
 }
 
@@ -113,6 +117,9 @@ func (c *SSHClient) One_cmd (cmd string) ([]byte, error) {
     return buf, nil
 }
 
+func (c *SSHClient) SetTimeout (t time.Duration) {
+    c.timeout_sec = t
+}
 func (c *SSHClient) Open (user string, pass string) error {
     c.User = user
     c.Pass = pass
@@ -120,7 +127,7 @@ func (c *SSHClient) Open (user string, pass string) error {
         User: c.User,
         Auth: []ssh.AuthMethod{ssh.Password(c.Pass)},
         HostKeyCallback: ssh.InsecureIgnoreHostKey(),
-        Timeout: time.Second*3,
+        Timeout: c.timeout_sec,
     }
 
     sc, e := ssh.Dial("tcp", c.IPv4+":"+c.Port, sshConfig)
