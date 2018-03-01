@@ -49,8 +49,8 @@ func StartNew(title string) *Spinner {
 
 // start spinner
 func (sp *Spinner) Start() *Spinner {
-	go sp.writer()
-	return sp
+    go sp.writer()
+    return sp
 }
 
 // set custom spinner frame rate
@@ -112,8 +112,6 @@ func (sp *Spinner) writer() {
 // workaround for Mac OS < 10 compatibility
 func (sp *Spinner) clearLine() {
 	if !sp.NoTty {
-		fmt.Printf("\033[2K")
-		fmt.Println()
-		fmt.Printf("\033[1A")
+            fmt.Printf("%s\r",ClearLineLeft())
 	}
 }
