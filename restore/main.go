@@ -26,7 +26,9 @@ var log oakUtility.OakLogger
 const AC_LITE = oakUtility.AC_LITE
 const AC_LITE_OLD = "ubntlite"
 const AC_LR   = oakUtility.AC_LR
+const AC_LR_OLD = "ubntlr"
 const AC_PRO  = oakUtility.AC_PRO
+const AC_PRO_OLD = "ubntpro"
 const UBNT_ERX  = "EdgeRouter_ER-X"
 const UBNT_ERX_OLD  = oakUtility.UBNT_ERX_OLD
 var local_imgfile = map[string]string {
@@ -349,7 +351,7 @@ func choose_restore_firmwire () {
         for _,d :=range n.Oak_dev_list {
             log.Debug.Printf("%v\n",d)
             switch d.Model {
-            case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD, AC_LITE_OLD:
+            case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD:
                 t := Target { host: d.IPv4, mac: d.Mac, Model: d.Model, SWver: d.Firmware}
                 targets = append(targets, t)
             }
