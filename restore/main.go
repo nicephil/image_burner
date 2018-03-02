@@ -323,7 +323,7 @@ func restore_unifi_ap (t Target) {
         return
     }
 
-    fmt.Printf ("MUST NOT POWER OFF, it might take several minutes!\n")
+    fmt.Printf ("\nwritting flash, MUST NOT POWER OFF, it might take several minutes!\n")
 
     var cmds = []string {
     "tar xzf "+remotefile+" -C /tmp",
@@ -338,7 +338,7 @@ func restore_unifi_ap (t Target) {
             return
         }
     }
-    fmt.Printf ("\n%s restored to factory image\n", t.host)
+    fmt.Printf ("\n%s restored to factory image, please power cycle device\n", t.host)
 }
 func choose_restore_firmwire () {
     var targets []Target
