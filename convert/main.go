@@ -103,7 +103,7 @@ func (s *Subnet) scan_one (host string) {
 }
 
 func (s *Subnet) OneLineSummary () {
-    fmt.Printf("✓ %s: Completed, %d Oakridge, %d UBNT devices\n",s.Net,len(s.Oak_dev_list),len(s.UBNT_ap_list))
+    fmt.Printf("✓ %s: %d Oakridge, %d UBNT devices\n",s.Net,len(s.Oak_dev_list),len(s.UBNT_ap_list))
 }
 func Is_ubnt_erx (c oakUtility.SSHClient) (*UBNT_AP) {
 

@@ -94,7 +94,7 @@ func (s *Subnet) scan_one (host string) {
 }
 
 func (s *Subnet) OneLineSummary () {
-    fmt.Printf("✓ %s: Completed, %d Oakridge devices\n",s.Net,len(s.Oak_dev_list))
+    fmt.Printf("✓ %s: %d Oakridge devices\n",s.Net,len(s.Oak_dev_list))
 }
 
 func Is_oakridge_dev (c oakUtility.SSHClient) (*Oakridge_Device) {
