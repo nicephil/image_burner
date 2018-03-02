@@ -180,3 +180,16 @@ func (c *SSHClient) Scp (local string, remote string, permission string) (int64,
 
     return stat.Size(), nil
 }
+// input a.b.c.d/x or a.b.c.d, return a.b.c.d/x
+func String2netstring (arg string) (string, error) {
+    IP := net.ParseIP(arg)
+    if IP.To4() != nil {
+        arg = arg+"/32"
+    }
+
+    if _, _, err := net.ParseCIDR (arg); err != nil {
+        return "",err
+    }
+
+    return arg, nil
+}

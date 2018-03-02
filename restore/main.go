@@ -323,7 +323,7 @@ func restore_unifi_ap (t Target) {
         return
     }
 
-    fmt.Printf ("\nwritting flash, MUST NOT POWER OFF, it might take several minutes!\n")
+    fmt.Printf ("\nWrite flash, MUST NOT POWER OFF, it might take several minutes!\n")
 
     var cmds = []string {
     "tar xzf "+remotefile+" -C /tmp",
@@ -428,14 +428,14 @@ func scan_local_subnet () {
 func scan_input_subnet (args []string) {
     var nets []string
     for _,arg := range args {
-        _, ipnet, err := net.ParseCIDR (arg)
+        net,err := oakUtility.String2netstring (arg)
         if err != nil {
             log.Error.Fatalln(err)
         }
-        nets = append (nets,ipnet.String())
+        nets = append (nets,net)
     }
 
-    println("Scanning user input networks ...\n")
+    println("Scan user input networks ...\n")
 
     // scan each subnet
     for _, net := range nets {

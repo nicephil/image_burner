@@ -392,7 +392,7 @@ func install_unifi_ap_img (t Target) {
         return
     }
 
-    fmt.Printf ("MUST NOT POWER OFF, it might take several minutes!\n")
+    fmt.Printf ("\nWriting flash, MUST NOT POWER OFF, it might take several minutes!\n")
 
     var cmds = []string {
     "tar xzf "+remotefile+" -C /tmp",
@@ -411,7 +411,7 @@ func install_unifi_ap_img (t Target) {
         }
     }
     p.Stop ()
-    fmt.Printf ("%s Image upgraded, rebooting ...\n", t.host)
+    fmt.Printf ("\n%s upgraded to Oakridge OS, please power cycle device\n", t.host)
 }
 func install_oak_firmwire () {
     var targets []Target
@@ -496,14 +496,14 @@ func scan_local_subnet () {
 func scan_input_subnet (args []string) {
     var nets []string
     for _,arg := range args {
-        _, ipnet, err := net.ParseCIDR (arg)
+        net,err := oakUtility.String2netstring (arg)
         if err != nil {
             log.Error.Fatalln(err)
         }
-        nets = append (nets,ipnet.String())
+        nets = append (nets,net)
     }
 
-    println("Scanning user input networks ...\n")
+    println("Scan user input networks ...\n")
 
     // scan each subnet
     for _, net := range nets {
