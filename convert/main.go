@@ -52,6 +52,11 @@ func Oakdev_PrintHeader () {
     fmt.Printf ("%s\n", strings.Repeat("=",96))
 }
 
+type Converted_AP struct {
+    Mac     string
+}
+var  converted_ap   []Converted_AP                  // remember all new converted AP
+
 type Subnet struct {
     Net             string
     holes           []net.IP                        // skip those ip-addr
@@ -347,6 +352,9 @@ func install_ubnt_erx_img (host string) {
     }
     c.One_cmd ("sysupgrade -n lede-ramips-mt7621-ubnt-erx-squashfs-sysupgrade.bin")
 }
+func record_converted_ap (mac string) {
+    converted_ap = append(converted_ap, Converted_AP{Mac: mac})
+}
 func install_one_device (t Target, s *sync.WaitGroup) {
     if s != nil {
         defer s.Done()
@@ -355,6 +363,7 @@ func install_one_device (t Target, s *sync.WaitGroup) {
     switch t.HWmodel {
     case AC_LITE, AC_LR, AC_PRO:
         install_unifi_ap_img (t)
+        record_converted_ap (t.mac)
     case UBNT_ERX:
         install_ubnt_erx_img (t.host)
     default:
@@ -514,6 +523,48 @@ func scan_input_subnet (args []string) {
     }
 }
 
+// write scanned Oakridge AP and newly converted AP to a csv file for easy import to oakmgr
+func write_OakAP_csv () {
+    var maclist []string
+    for _,n := range netlist {
+        for _,ap := range n.Oak_dev_list{
+            if ap.HWmodel == UBNT_ERX {
+                continue
+            }
+            maclist = append (maclist, ap.Mac)
+        }
+    }
+    for _,ap := range converted_ap {
+        maclist = append (maclist, ap.Mac)
+    }
+
+    if len(maclist) == 0 {
+        return
+    }
+
+    const file string = "oakridge_ap.csv"
+    const tablehead string = "MAC"
+
+    f, err := os.Create(file)
+    if err != nil {
+        log.Error.Printf("%s\n",err.Error())
+        return
+    }
+    defer f.Close()
+    w := bufio.NewWriter(f)
+
+    w.WriteString("# Automatically generated at "+time.Now().Format(time.RFC3339)+"\n")
+    w.WriteString(tablehead+"\n")
+
+    for _,m := range maclist {
+        w.WriteString(m+"\n")
+    }
+
+    w.Flush()
+
+    fmt.Printf ("\nAll Oakridge AP saved in %s to be import into management system\n", file)
+}
+
 func init () {
     log = oakUtility.New_OakLogger()
     log.Set_level ("info")
@@ -533,7 +584,7 @@ func main() {
 
     install_oak_firmwire ()
 
-    //list_oakdev_csv ()
+    write_OakAP_csv ()
 
     println(Banner_end)
 }
