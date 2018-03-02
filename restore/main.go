@@ -24,6 +24,7 @@ var log oakUtility.OakLogger
 
 // NOTE:  ac-lite/ac-lr/ac-pro share the same img, for handy program, just list them all
 const AC_LITE = oakUtility.AC_LITE
+const AC_LITE_OLD = "ubntlite"
 const AC_LR   = oakUtility.AC_LR
 const AC_PRO  = oakUtility.AC_PRO
 const UBNT_ERX  = "EdgeRouter_ER-X"
@@ -348,7 +349,7 @@ func choose_restore_firmwire () {
         for _,d :=range n.Oak_dev_list {
             log.Debug.Printf("%v\n",d)
             switch d.Model {
-            case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD:
+            case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD, AC_LITE_OLD:
                 t := Target { host: d.IPv4, mac: d.Mac, Model: d.Model, SWver: d.Firmware}
                 targets = append(targets, t)
             }
