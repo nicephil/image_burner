@@ -351,8 +351,17 @@ func choose_restore_firmwire () {
         for _,d :=range n.Oak_dev_list {
             log.Debug.Printf("%v\n",d)
             switch d.Model {
-            case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD:
-                t := Target { host: d.IPv4, mac: d.Mac, Model: d.Model, SWver: d.Firmware}
+            case AC_PRO, AC_PRO_OLD:
+                t := Target { host: d.IPv4, mac: d.Mac, Model: AC_PRO, SWver: d.Firmware}
+                targets = append(targets, t)
+            case AC_LITE, AC_LITE_OLD:
+                t := Target { host: d.IPv4, mac: d.Mac, Model: AC_LITE, SWver: d.Firmware}
+                targets = append(targets, t)
+            case AC_LR, AC_LR_OLD:
+                t := Target { host: d.IPv4, mac: d.Mac, Model: AC_LR, SWver: d.Firmware}
+                targets = append(targets, t)
+            case UBNT_ERX, UBNT_ERX_OLD:
+                t := Target { host: d.IPv4, mac: d.Mac, Model: UBNT_ERX, SWver: d.Firmware}
                 targets = append(targets, t)
             }
         }
