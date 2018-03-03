@@ -266,7 +266,7 @@ type Target struct {
 }
 
 var erx_imgs = map[string][]string {
-    "factory":      {"erx_factory.bin.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubnterx/factory.bin.tar.gz"},
+    "factory":      {"erx_factory.bin.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubnterx/origin/factory.bin.tar.gz"},
     "oakridge":     {"oakridge_sysupgrade.bin.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubnterx/sysloader/latest-sysupgrade.bin.tar.gz"},
 }
 func erx_factory_img (host string) error {
