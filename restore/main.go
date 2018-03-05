@@ -362,7 +362,6 @@ func restore_unifi_ap152_ap (t Target) {
     fmt.Printf ("\n%s restored to factory image, please power cycle device\n", t.host)
 }
 func choose_restore_firmwire () {
-
     // targets is put together in list_scan_result
     if len(targets) == 0 {
         println("\nNo supported 3rd-party devices found")
