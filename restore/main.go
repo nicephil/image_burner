@@ -18,6 +18,7 @@ import (
  * global vars
  */
 var netlist []Subnet
+var targets []Target
 const Banner_start = "\nFirmware Restore Utility, Ver 1.01, (c) Oakridge Networks, Inc. 2018\n"
 const Banner_end = "\nThanks for choose Oakridge Networks Inc.\n"
 var log oakUtility.OakLogger
@@ -31,6 +32,10 @@ const AC_PRO  = oakUtility.AC_PRO
 const AC_PRO_OLD = "ubntpro"
 const UBNT_ERX  = "EdgeRouter_ER-X"
 const UBNT_ERX_OLD  = oakUtility.UBNT_ERX_OLD
+const A923 = "A923"
+const A820 = "A820"
+const A822 = "A822"
+const W282 = "W282"
 var local_imgfile = map[string]string {
     AC_LITE: "",
     AC_LR:   "",
@@ -155,8 +160,10 @@ func list_scan_result () {
         for _,o :=range n.Oak_dev_list {
             cnt++
             switch o.Model {
-            case AC_LITE,AC_LR,AC_PRO,UBNT_ERX:
+            case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923,A820,A822,W282:
                 fmt.Printf("✓%-3d %s\n", cnt, o.OneLineSummary())
+                t := Target { host: o.IPv4, mac: o.Mac, Model: o.Model, SWver: o.Firmware}          // we put together the target list, so later it can just be used directly
+                targets = append(targets, t)
             default:
                 fmt.Printf(" %-3d %s\n", cnt, o.OneLineSummary())
             }
@@ -284,8 +291,16 @@ func restore_one_device (t Target, s *sync.WaitGroup) {
     }
 
     switch t.Model {
-    case AC_LITE, AC_LR, AC_PRO:
-        restore_unifi_ap (t)
+    case AC_LITE, AC_LR, AC_PRO, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923,A820,A822,W282:
+        switch t.Model {
+        case AC_LITE_OLD:
+            t.Model = AC_LITE
+        case AC_LR_OLD:
+            t.Model = AC_LR
+        case AC_PRO_OLD:
+            t.Model = AC_PRO
+        }
+        restore_unifi_ap152_ap (t)
     case UBNT_ERX,UBNT_ERX_OLD:
         restore_ubnt_erx (t.host)
     default:
@@ -293,23 +308,26 @@ func restore_one_device (t Target, s *sync.WaitGroup) {
         return
     }
 }
-
-var unifi_ap_imgs = map[string][]string { //NOTE these 3 are use same img
-    AC_LITE: {"ubnt.unifi.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/firmware.bin.tar.gz"},
-    AC_LR:   {"ubnt.unifi.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/firmware.bin.tar.gz"},
-    AC_PRO:  {"ubnt.unifi.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/firmware.bin.tar.gz"},
+var ap_origin_imgs = map[string][]string { //NOTE these 3 are use same img
+    AC_LITE: {"aclite.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/AC-LITE/firmware.bin.tar.gz"},
+    AC_LR:   {"aclr.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/AC-LR/firmware.bin.tar.gz"},
+    AC_PRO:  {"acpro.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/AC-PRO/firmware.bin.tar.gz"},
+    A923:    {"a923.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/A923/firmware.bin.tar.gz"},
+    A820:    {"a820.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/A820/firmware.bin.tar.gz"},
+    A822:    {"a822.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/A822/firmware.bin.tar.gz"},
+    W282:    {"w282.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/W282/firmware.bin.tar.gz"},
 }
-func restore_unifi_ap (t Target) {
+func restore_unifi_ap152_ap (t Target) {
 
-    localfile := unifi_ap_imgs[t.Model][0]
-    url := unifi_ap_imgs[t.Model][1]
+    localfile := ap_origin_imgs[t.Model][0]
+    url := ap_origin_imgs[t.Model][1]
 
     if err := oakUtility.On_demand_download (localfile, url); err != nil {
         log.Error.Println(err.Error())
         return
     }
 
-    p := spinner.StartNew("Restore "+t.host+" ...")
+    p := spinner.StartNew("Restore "+t.host+" "+t.Model+" ...")
     defer p.Stop ()
 
     c := oakUtility.New_SSHClient (t.host)
@@ -344,20 +362,8 @@ func restore_unifi_ap (t Target) {
     fmt.Printf ("\n%s restored to factory image, please power cycle device\n", t.host)
 }
 func choose_restore_firmwire () {
-    var targets []Target
 
-    // prepare the list
-    for _,n:=range netlist {
-        for _,d :=range n.Oak_dev_list {
-            log.Debug.Printf("%v\n",d)
-            switch d.Model {
-            case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD:
-                t := Target { host: d.IPv4, mac: d.Mac, Model: d.Model, SWver: d.Firmware}
-                targets = append(targets, t)
-            }
-        }
-    }
-
+    // targets is put together in list_scan_result
     if len(targets) == 0 {
         println("\nNo supported 3rd-party devices found")
         return
