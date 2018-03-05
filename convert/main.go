@@ -27,8 +27,18 @@ const AC_LITE = oakUtility.AC_LITE
 const AC_LR   = oakUtility.AC_LR
 const AC_PRO  = oakUtility.AC_PRO
 const UBNT_ERX = oakUtility.UBNT_ERX
+const SEAP380 = "SEAP-380"
 
 
+type AP_SEAP380 struct {
+    Mac             string
+    IPv4            string
+    Vendor          string
+    OEM             string
+    Devname         string
+    Board_SN        string  // serial number
+    Manufact_date   string
+}
 type UBNT_AP struct {
     Mac             string
     IPv4            string
@@ -47,8 +57,11 @@ type Oakridge_Device struct {
 func (d *Oakridge_Device) OneLineSummary () string {
     return fmt.Sprintf ("%-12s%-16s%-18s%-16s%s", "Oakridge", d.HWmodel, d.Mac, d.IPv4, d.Firmware)
 }
+func (d *AP_SEAP380) OneLineSummary () string {
+    return fmt.Sprintf ("%-12s%-16s%-18s%-16s%s", d.Vendor, d.OEM, d.Mac, d.IPv4, d.Manufact_date+" "+d.Board_SN)
+}
 func Oakdev_PrintHeader () {
-    fmt.Printf ("\n%-4s %-12s%-16s%-18s%-16s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Firmware")
+    fmt.Printf ("\n%-4s %-12s%-16s%-18s%-16s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Description")
     fmt.Printf ("%s\n", strings.Repeat("=",96))
 }
 
@@ -62,6 +75,7 @@ type Subnet struct {
     holes           []net.IP                        // skip those ip-addr
     Oak_dev_list    []*Oakridge_Device
     UBNT_ap_list    []*UBNT_AP
+    seap380_list    []*AP_SEAP380
     batch           sync.WaitGroup                   // this to wait all host finish before exit
 }
 
@@ -73,6 +87,7 @@ func (s *Subnet) Holes (h []net.IP) {
 }
 
 func (s *Subnet) Scan () {
+    log.Info.Printf ("scanning %s\n", s.Net)
     hosts,err := oakUtility.Net2hosts_exclude (s.Net, s.holes)
     if err != nil {
         fmt.Println(s.Net,err)
@@ -99,11 +114,17 @@ func (s *Subnet) scan_one (host string) {
     c := oakUtility.New_SSHClient (host)
 
     if dev := Is_oakridge_dev(c); dev != nil {
+            log.Info.Printf("%v is Oakridge device\n", dev)
             s.Oak_dev_list = append(s.Oak_dev_list, dev)
     } else if dev := Is_ubnt_ap(c); dev != nil {
+            log.Info.Printf("%s is Ubiqiti AP\n", c.IPv4)
             s.UBNT_ap_list = append(s.UBNT_ap_list, dev)
     } else if dev := Is_ubnt_erx(c); dev != nil {
+            log.Info.Printf("%s is Ubiqiti ERX\n", c.IPv4)
             s.UBNT_ap_list = append(s.UBNT_ap_list, dev)
+    } else if dev := Is_ap_seap380 (c); dev != nil {
+            log.Info.Printf("%s is SEAP-380\n", c.IPv4)
+            s.seap380_list = append(s.seap380_list, dev)
     }
 }
 
@@ -188,6 +209,7 @@ func Is_oakridge_dev (c oakUtility.SSHClient) (*Oakridge_Device) {
             log.Debug.Printf ("%s: %s\n",c.IPv4, err.Error())
             return nil
         }
+        dev.Firmware = strings.TrimSpace(string(buf))
     }
     dev.IPv4 = c.IPv4
     return &dev
@@ -238,8 +260,59 @@ func Is_ubnt_ap (c oakUtility.SSHClient) (*UBNT_AP) {
     dev.IPv4 = c.IPv4
     return &dev
 }
+func Is_ap_seap380 (c oakUtility.SSHClient) (*AP_SEAP380) {
+
+    if err := c.Open("admin", "admin"); err != nil {
+        log.Debug.Printf ("fail login %s: %s\n",c.IPv4, err.Error())
+        return nil
+    }
+    defer c.Close()
 
 
+    buf, err := c.One_cmd ("strings /dev/mtd5 | grep =")
+    if err != nil {
+        log.Debug.Printf ("%s: %s\n",c.IPv4, err.Error())
+        return nil
+    }
+
+    // now we parse the <key>=<value>
+    var dev AP_SEAP380
+    tvs := strings.Split (strings.TrimSpace(string(buf)), "\n")
+    for _, t:=range tvs {
+        kv := strings.Split (t, "=")
+        k := strings.TrimSpace(kv[0])
+        v := strings.TrimSpace(kv[1])
+        if len(v) > 0 && v[0] == '"' {      // remove <"> 
+            v = v[1:]
+        }
+        if len(v) > 0 && v[len(v)-1] == '"' {
+            v = v[:len(v)-1]
+        }
+        switch k {
+        case "MAC_ADDRESS":
+            dev.Mac = v
+        case "VENDOR_NAME":
+            dev.Vendor = v
+        case "DEV_OEMNAME":
+            dev.OEM = v
+        case "DEV_NAME":
+            dev.Devname= v
+        case "BOARD_SERIAL_NUMBER":
+            dev.Board_SN = v
+        case "MANUFACTURING_DATE":
+            dev.Manufact_date = v
+        }
+    }
+
+
+    if dev.OEM != "SEAP-380" {
+        return nil
+    }
+
+    dev.IPv4 = c.IPv4
+    log.Debug.Printf("%v\n",dev)
+    return &dev
+}
 func list_scan_result () {
     cnt := 0
 
@@ -252,6 +325,10 @@ func list_scan_result () {
         for _,u :=range n.UBNT_ap_list {
             cnt++
             fmt.Printf("✓%-3d %s\n", cnt, u.OneLineSummary())
+        }
+        for _,s :=range n.seap380_list{
+            cnt++
+            fmt.Printf("✓%-3d %s\n", cnt, s.OneLineSummary())
         }
     }
 }
@@ -327,7 +404,8 @@ func install_ubnt_erx_img (host string) {
     pinger.Run()
     p.Stop ()
 
-    p = spinner.StartNew("Install Oakridge img ...")
+    p.SetTitle ("Install Oakridge img ...")
+    p.Start ()
     defer p.Stop ()
     c := oakUtility.New_SSHClient (host)                                    // ssh back to device again
     for {
@@ -356,14 +434,22 @@ func record_converted_ap (mac string) {
     converted_ap = append(converted_ap, Converted_AP{Mac: mac})
 }
 func install_one_device (t Target, s *sync.WaitGroup) {
+
     if s != nil {
         defer s.Done()
     }
 
     switch t.HWmodel {
     case AC_LITE, AC_LR, AC_PRO:
-        install_unifi_ap_img (t)
-        record_converted_ap (t.mac)
+        err := install_unifi_ap_img (t)
+        if err == nil {
+            record_converted_ap (t.mac)
+        }
+    case SEAP380:
+        err := install_via_sysupgrade (t)
+        if err == nil {
+            record_converted_ap (t.mac)
+        }
     case UBNT_ERX:
         install_ubnt_erx_img (t.host)
     default:
@@ -371,34 +457,79 @@ func install_one_device (t Target, s *sync.WaitGroup) {
         return
     }
 }
+var ap152_imgs = map[string][]string {
+    SEAP380: {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+}
+func install_via_sysupgrade (t Target) error {
+    localfile := ap152_imgs[t.HWmodel][0]
+    url := ap152_imgs[t.HWmodel][1]
+
+    log.Info.Printf ("install %s %s from %s\n",t.host, localfile, url)
+
+    if err := oakUtility.On_demand_download (localfile, url); err != nil {
+        log.Error.Printf ("on-demand-download %s fail: %s\n", url, err.Error())
+        return err
+    }
+
+    c := oakUtility.New_SSHClient (t.host)
+    if err := c.Open(t.user, t.pass); err != nil {
+        log.Error.Printf ("ssh connected to %s: %s\n", t.host, err.Error())
+        return err
+    }
+    defer c.Close()
+
+    p := spinner.StartNew("copy img ...")
+
+    if _,err := c.Scp (localfile, "/tmp/"+localfile, "0644"); err != nil {
+        log.Error.Println(err.Error())
+        p.Stop ()
+        return err
+    }
+    p.Stop ()
+
+    fmt.Printf ("\nWriting flash, MUST NOT POWER OFF, it might take several minutes!\n")
+    p.SetTitle("writing flash ...")
+    p.Start ()
+
+    if _, err := c.One_cmd ("tar xzf /tmp/"+localfile+" -C /tmp"); err != nil {
+        log.Error.Printf ("%s\n", err.Error())
+        p.Stop ()
+        return err
+    }
+    buf,err := c.One_cmd ("sysupgrade -n /tmp/openwrt-ar71xx-generic-ap152-16M-squashfs-sysupgrade.bin")
+    log.Debug.Printf ("<%s> %s\n", string(buf), err.Error())
+    p.Stop ()
+    return nil
+}
 var unifi_ap_imgs = map[string][]string {
     AC_LITE: {"oakridge.sysloader.ubnt.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-sysupgrade.bin.tar.gz"},
     AC_LR:   {"oakridge.sysloader.ubnt.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-sysupgrade.bin.tar.gz"},
     AC_PRO:  {"oakridge.sysloader.ubnt.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-sysupgrade.bin.tar.gz"},
 }
-func install_unifi_ap_img (t Target) {
+func install_unifi_ap_img (t Target) error {
 
     localfile := unifi_ap_imgs[t.HWmodel][0]
     url := unifi_ap_imgs[t.HWmodel][1]
 
     if err := oakUtility.On_demand_download (localfile, url); err != nil {
         log.Error.Printf ("on-demand-download %s fail: %s\n", url, err.Error())
-        return
+        return err
     }
 
     p := spinner.StartNew("Install "+t.host+" ...")
+    defer p.Stop ()
 
     c := oakUtility.New_SSHClient (t.host)
     if err := c.Open(t.user, t.pass); err != nil {
         log.Error.Printf ("ssh %s: %s\n", t.host, err.Error())
-        return
+        return err
     }
     defer c.Close()
 
     remotefile := "/tmp/oakridge.tar.gz"
     if _,err := c.Scp (localfile, remotefile, "0644"); err != nil {
         log.Error.Println (err.Error())
-        return
+        return err
     }
 
     fmt.Printf ("\nWriting flash, MUST NOT POWER OFF, it might take several minutes!\n")
@@ -416,11 +547,11 @@ func install_unifi_ap_img (t Target) {
         _, err := c.One_cmd (cmd)
         if err != nil {
             log.Error.Printf ("%s: %s\n", cmd,err.Error())
-            return
+            return err
         }
     }
-    p.Stop ()
     fmt.Printf ("\n%s upgraded to Oakridge OS, please power cycle device\n", t.host)
+    return nil
 }
 func install_oak_firmwire () {
     var targets []Target
@@ -434,6 +565,10 @@ func install_oak_firmwire () {
                 targets = append(targets, t)
             }
         }
+        for _,d :=range n.seap380_list {
+            t := Target { host: d.IPv4, mac: d.Mac, user: "admin", pass: "admin", HWmodel: d.OEM}
+            targets = append(targets, t)
+        }
     }
 
     if len(targets) == 0 {
@@ -443,10 +578,10 @@ func install_oak_firmwire () {
 
     var choice int
     for {
-        println("\nChoose which device to restore(ctrl-C to exist):")
+        println("\nChoose which device to convert(ctrl-C to exist):")
         println("[0]. All devices")
         for i,d := range targets {
-            fmt.Printf("[%d]. %s %s %s\n", i+1, d.host, d.mac, d.HWmodel)
+            fmt.Printf("[%d]. %-16s %-18s %s\n", i+1, d.host, d.mac, d.HWmodel)
         }
 
         fmt.Printf("Please choose: [0~%d]\n", len(targets))
@@ -567,7 +702,7 @@ func write_OakAP_csv () {
 
 func init () {
     log = oakUtility.New_OakLogger()
-    log.Set_level ("info")
+    log.Set_level ("error")
 }
 
 func main() {

@@ -238,7 +238,8 @@ func restore_ubnt_erx (host string) {
     pinger.Run()
     p.Stop ()
 
-    p = spinner.StartNew("Restoring factory img ...")
+    p.SetTitle ("Restoring factory img ...")
+    p.Start ()
     defer p.Stop ()
     c := oakUtility.New_SSHClient (host)                                    // ssh back to device again
     for {
@@ -346,17 +347,24 @@ func restore_unifi_ap152_ap (t Target) {
 
     fmt.Printf ("\nWrite flash, MUST NOT POWER OFF, it might take several minutes!\n")
 
-    var cmds = []string {
-    "tar xzf "+remotefile+" -C /tmp",
-    "rm -rvf "+remotefile,
-    "mtd write /tmp/firmware.bin firmware",
-    "reboot",
+    var cmds = [][]string {
+    {"stop", "optional"},
+    {"tar xzf "+remotefile+" -C /tmp", "mandatory"},
+    {"rm -rvf "+remotefile, "mandatory"},
+    {"/etc/init.d/capwap stop", "optional"},
+    {"/etc/init.d/handle_cloud stop", "optional"},
+    {"/etc/init.d/wifidog stop", "optional"},
+    {"/etc/init.d/arpwatch stop", "optional"},
+    {"mtd write /tmp/firmware.bin firmware", "mandatory"},
+    {"reboot", "mandatory"},
     }
     for _, cmd := range cmds {
-        _, err := c.One_cmd (cmd)
+        buf, err := c.One_cmd (cmd[0])
         if err != nil {
-            fmt.Printf ("\n%s: %s\n",cmd, err.Error())
-            return
+            log.Debug.Printf ("\n%v: %s <%s>\n",cmd, err.Error(), string(buf))
+            if cmd[1] == "mandatory" {
+                return
+            }
         }
     }
     fmt.Printf ("\n%s restored to factory image, please power cycle device\n", t.host)
@@ -456,7 +464,7 @@ func scan_input_subnet (args []string) {
 
 func init () {
     log = oakUtility.New_OakLogger()
-    log.Set_level ("info")
+    log.Set_level ("error")
 }
 
 func main() {
