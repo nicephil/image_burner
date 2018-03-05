@@ -56,11 +56,11 @@ func DownloadFile(filepath string, url string, progress bool, prefix string) err
 	if err != nil {
 		return err
 	}
-	defer out.Close()
 
 	// Get the data
 	resp, err := http.Get(url)
 	if err != nil {
+	        out.Close()
 		return err
 	}
 	defer resp.Body.Close()
@@ -73,9 +73,11 @@ func DownloadFile(filepath string, url string, progress bool, prefix string) err
 	    _, err = io.Copy(out, resp.Body)
     }
 	if err != nil {
+	    out.Close()
 	    return err
 	}
 
+	out.Close()
 	err = os.Rename(filepath+".tmp", filepath)
 	if err != nil {
 		return err
