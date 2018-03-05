@@ -53,6 +53,12 @@ func (sp *Spinner) Start() *Spinner {
     return sp
 }
 
+// change title
+func (sp *Spinner) SetTitle(t string){
+    sp.Title = t
+    fmt.Printf("%s\r",ClearEntireLine())
+}
+
 // set custom spinner frame rate
 func (sp *Spinner) SetSpeed(rate time.Duration) *Spinner {
 	sp.Lock()
