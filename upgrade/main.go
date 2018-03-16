@@ -3,15 +3,14 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"image_burner/ping"
 	"image_burner/spinner"
 	"image_burner/util"
 	"net"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 /*
@@ -20,7 +19,7 @@ import (
 var netlist []Subnet
 var targets []Target
 
-const Banner_start = "\nFirmware Restore Utility, Ver 1.01, (c) Oakridge Networks, Inc. 2018\n"
+const Banner_start = "\nFirmware Upgrade Utility, Ver 1.01, (c) Oakridge Networks, Inc. 2018\n"
 const Banner_end = "\nThanks for choose Oakridge Networks Inc.\n"
 
 var log oakUtility.OakLogger
@@ -38,8 +37,8 @@ const A923 = "A923"
 const A820 = "A820"
 const A822 = "A822"
 const W282 = "W282"
-const WL8200_I2 = "WL8200-I2"
 const A920 = "A920"
+const WL8200_I2 = "WL8200-I2"
 
 var local_imgfile = map[string]string{
 	AC_LITE: "",
@@ -53,14 +52,49 @@ type Oakridge_Device struct {
 	Name     string
 	IPv4     string
 	Firmware string
+	LatestFW string
+}
+
+func (d *Oakridge_Device) Get_latest_version() (version string) {
+	version = ""
+	d.LatestFW = ""
+	localfile := ""
+	url := ""
+
+	switch d.Model {
+	case AC_LITE, AC_LR, AC_PRO, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923, A820, A822, W282, A920, WL8200_I2:
+		url = "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-swversion.txt"
+		localfile = "latest-swversion-ap152.txt"
+	case UBNT_ERX, UBNT_ERX_OLD:
+		url = "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-swversion.txt"
+		localfile = "latest-swversion-ubnerx.txt"
+	default:
+		return
+	}
+
+	if err := oakUtility.On_demand_download(localfile, url); err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
+
+	cmd := exec.Command("/bin/sh", "-c", "cat "+localfile)
+	out, err := cmd.Output()
+	if err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
+	version = strings.TrimSpace(string(out))
+
+	d.LatestFW = version
+	return
 }
 
 func (d *Oakridge_Device) OneLineSummary() string {
-	return fmt.Sprintf("%-12s%-16s%-18s%-16s%s", "Oakridge", d.Name, d.Mac, d.IPv4, d.Firmware)
+	return fmt.Sprintf("%-12s%-16s%-18s%-16s%-25s%s", "Oakridge", d.Name, d.Mac, d.IPv4, d.Firmware, d.LatestFW)
 }
 func Oakdev_PrintHeader() {
-	fmt.Printf("\n%-4s %-12s%-16s%-18s%-16s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Firmware")
-	fmt.Printf("%s\n", strings.Repeat("=", 96))
+	fmt.Printf("\n%-4s %-12s%-16s%-18s%-16s%-25s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Firmware", "Latest-Firmware")
+	fmt.Printf("%s\n", strings.Repeat("=", 116))
 }
 
 type Subnet struct {
@@ -163,10 +197,14 @@ func list_scan_result() {
 		for _, o := range n.Oak_dev_list {
 			cnt++
 			switch o.Model {
-			case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923, A820, A822, W282, WL8200_I2, A920:
+			case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923, A820, A822, W282, A920, WL8200_I2:
+				o.Get_latest_version()
 				fmt.Printf("✓%-3d %s\n", cnt, o.OneLineSummary())
-				t := Target{host: o.IPv4, mac: o.Mac, Model: o.Model, Name: o.Name, SWver: o.Firmware} // we put together the target list, so later it can just be used directly
-				targets = append(targets, t)
+				if o.Firmware != o.LatestFW {
+					t := Target{host: o.IPv4, mac: o.Mac, Model: o.Model,
+						Name: o.Name, SWver: o.Firmware, LatestSW: o.LatestFW} // we put together the target list, so later it can just be used directly
+					targets = append(targets, t)
+				}
 			default:
 				fmt.Printf(" %-3d %s\n", cnt, o.OneLineSummary())
 			}
@@ -175,122 +213,15 @@ func list_scan_result() {
 }
 
 type Target struct {
-	host  string
-	mac   string
-	Model string
-	Name  string
-	SWver string
+	host     string
+	mac      string
+	Model    string
+	Name     string
+	SWver    string
+	LatestSW string
 }
 
-var erx_imgs = map[string][]string{
-	"recover":    {"erx_recover.tar.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubnterx/origin/recover-ubnt-erx.tar.tar.gz"},
-	"squash":     {"erx_squashfs.tmp", "http://image.oakridge.vip:8000/images/ap/ubnterx/origin/squashfs.tmp"},
-	"squash_md5": {"erx_squashfs.tmp.md5", "http://image.oakridge.vip:8000/images/ap/ubnterx/origin/squashfs.tmp.md5"},
-	"version":    {"erx_version.tmp", "http://image.oakridge.vip:8000/images/ap/ubnterx/origin/version.tmp"},
-	"vmlinux":    {"erx_vmlinux.tmp", "http://image.oakridge.vip:8000/images/ap/ubnterx/origin/vmlinux.tmp"},
-}
-
-func ubnt_recover_img(host string, file string) error {
-
-	p := spinner.StartNew("Install recover img ...")
-	defer p.Stop()
-
-	c := oakUtility.New_SSHClient(host)
-	if err := c.Open("root", "oakridge"); err != nil {
-		return err
-	}
-	defer c.Close()
-	if _, err := c.Scp(file, "/tmp/"+file, "0644"); err != nil {
-		return err
-	}
-	log.Debug.Printf("done scp %s to %s:%s\n", file, host, "/tmp/"+file)
-	if _, err := c.One_cmd("tar xzf /tmp/" + file + " -C /tmp"); err != nil {
-		return err
-	}
-	log.Debug.Printf("done untar %s:%s\n", host, "/tmp/"+file)
-	//last cmd expect return err
-	log.Debug.Printf("sysupgrade -n /tmp/recovery-ubnt-erx.tar")
-	c.One_cmd("sysupgrade -n /tmp/recovery-ubnt-erx.tar")
-	return nil
-}
-func restore_ubnt_erx(host string) {
-
-	log.Debug.Printf("Start restore %s\n", host)
-
-	for _, v := range erx_imgs { // download resource
-		if err := oakUtility.On_demand_download(v[0], v[1]); err != nil {
-			log.Error.Println(err.Error())
-			return
-		}
-	}
-
-	if err := ubnt_recover_img(host, erx_imgs["recover"][0]); err != nil { // recover img and reboot
-		log.Error.Println(err.Error())
-		return
-	}
-
-	p := spinner.StartNew("Wait device bootup ...")
-
-	pinger, err := ping.NewPinger(host)
-	if err != nil {
-		panic(err)
-	}
-	pinger.SetStopAfter(5)
-	pinger.OnRecv = func(pkt *ping.Packet) {
-		fmt.Printf("%d bytes from %s: icmp_seq=%d time=%v\n", pkt.Nbytes, pkt.IPAddr, pkt.Seq, pkt.Rtt)
-	}
-	pinger.Run()
-	p.Stop()
-
-	p.SetTitle("Restoring factory img ...")
-	p.Start()
-	defer p.Stop()
-	c := oakUtility.New_SSHClient(host) // ssh back to device again
-	for {
-		time.Sleep(1 * time.Second)
-		err := c.Open("root", "oakridge")
-		if err == nil {
-			log.Debug.Printf("ssh connected to %s\n", host)
-			break
-		}
-		log.Debug.Println(err.Error())
-	}
-	defer c.Close()
-
-	for k, v := range erx_imgs { // scp other file to device
-		if k == "recover" {
-			continue
-		}
-		if _, err := c.Scp(v[0], "/tmp/"+v[0], "0644"); err != nil {
-			println(err)
-			return
-		}
-		log.Debug.Printf("done scp %s to %s:%s\n", v[0], host, "/tmp/"+v[0])
-	}
-	var cmds = []string{
-		"ubidetach -m 5",
-		"ubiformat /dev/mtd5",
-		"ubiattach -p /dev/mtd5",
-		"ubimkvol /dev/ubi0 --vol_id=0 --lebs=1925 --name=troot",
-		"mount -o sync -t ubifs ubi0:troot /mnt",
-		"mtd write /tmp/" + erx_imgs["vmlinux"][0] + " kernel1",
-		"mtd write /tmp/" + erx_imgs["vmlinux"][0] + " kernel2",
-		"cp /tmp/" + erx_imgs["version"][0] + " /mnt/version",
-		"cp /tmp/" + erx_imgs["squash"][0] + " /mnt/squashfs.img",
-		"cp /tmp/" + erx_imgs["squash_md5"][0] + " /mnt/squashfs.img.md5",
-		"reboot",
-	}
-	for _, cmd := range cmds {
-		log.Debug.Printf("%s ...\n", cmd)
-		_, err := c.One_cmd(cmd)
-		if err != nil {
-			log.Error.Printf("\n%s: %s\n", cmd, err.Error())
-			return
-		}
-	}
-	fmt.Printf("\nDevice restored to factory image successfully\n")
-}
-func restore_one_device(t Target, s *sync.WaitGroup) {
+func upgrade_one_device(t Target, s *sync.WaitGroup) {
 	if s != nil {
 		defer s.Done()
 	}
@@ -305,9 +236,13 @@ func restore_one_device(t Target, s *sync.WaitGroup) {
 		case AC_PRO_OLD:
 			t.Model = AC_PRO
 		}
-		restore_unifi_ap152_ap(t)
+		upgrade_unifi_ap152_ap(t)
 	case UBNT_ERX, UBNT_ERX_OLD:
-		restore_ubnt_erx(t.host)
+		switch t.Model {
+		case UBNT_ERX_OLD:
+			t.Model = UBNT_ERX
+		}
+		upgrade_unifi_ap152_ap(t)
 	default:
 		fmt.Printf("unsupport model %s\n", t.Model)
 		return
@@ -315,18 +250,19 @@ func restore_one_device(t Target, s *sync.WaitGroup) {
 }
 
 var ap_origin_imgs = map[string][]string{ //NOTE these 3 are use same img
-	AC_LITE:   {"aclite.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/AC-LITE/firmware.bin.tar.gz"},
-	AC_LR:     {"aclr.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/AC-LR/firmware.bin.tar.gz"},
-	AC_PRO:    {"acpro.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/origin/AC-PRO/firmware.bin.tar.gz"},
-	A923:      {"a923.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/A923/firmware.bin.tar.gz"},
-	A820:      {"a820.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/A820/firmware.bin.tar.gz"},
-	A822:      {"a822.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/A822/firmware.bin.tar.gz"},
-	W282:      {"w282.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/W282/firmware.bin.tar.gz"},
-	A920:      {"a920.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/A920/firmware.bin.tar.gz"},
-	WL8200_I2: {"wl8200_i2.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/WL8200-I2/firmware.bin.tar.gz"},
+	AC_LITE:   {"aclite.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-sysupgrade.bin.tar.gz"},
+	AC_LR:     {"aclr.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-sysupgrade.bin.tar.gz"},
+	AC_PRO:    {"acpro.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A923:      {"a923.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A820:      {"a820.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A822:      {"a822.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	W282:      {"w282.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A920:      {"a920.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	WL8200_I2: {"wl8200_i2.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	UBNT_ERX:  {"ubnterx.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubnterx/sysloader/latest-sysupgrade.bin.tar.gz"},
 }
 
-func restore_unifi_ap152_ap(t Target) {
+func upgrade_unifi_ap152_ap(t Target) {
 
 	localfile := ap_origin_imgs[t.Model][0]
 	url := ap_origin_imgs[t.Model][1]
@@ -336,7 +272,7 @@ func restore_unifi_ap152_ap(t Target) {
 		return
 	}
 
-	p := spinner.StartNew("Restore " + t.host + " " + t.Model + " ...")
+	p := spinner.StartNew("Upgrade " + t.host + " " + t.Model + " ...")
 	defer p.Stop()
 
 	c := oakUtility.New_SSHClient(t.host)
@@ -356,15 +292,15 @@ func restore_unifi_ap152_ap(t Target) {
 	fmt.Printf("\nWrite flash, MUST NOT POWER OFF, it might take several minutes!\n")
 
 	var cmds = [][]string{
+		{"echo 'Auto Upgrade Now...'|logger -p2", "optional"},
 		{"stop", "optional"},
-		{"tar xzf " + remotefile + " -C /tmp", "mandatory"},
-		{"rm -rvf " + remotefile, "mandatory"},
-		{"/etc/init.d/capwap stop", "optional"},
+		{"echo /etc/init.d/capwap stop", "optional"},
 		{"/etc/init.d/handle_cloud stop", "optional"},
 		{"/etc/init.d/wifidog stop", "optional"},
 		{"/etc/init.d/arpwatch stop", "optional"},
-		{"mtd write /tmp/firmware.bin firmware", "mandatory"},
-		{"reboot", "mandatory"},
+		{"tar xzf " + remotefile + " -C /tmp", "mandatory"},
+		{"rm -rvf " + remotefile, "mandatory"},
+		{"sysupgrade -n /tmp/*-squashfs-sysupgrade.bin", "mandatory"},
 	}
 	for _, cmd := range cmds {
 		buf, err := c.One_cmd(cmd[0])
@@ -375,9 +311,9 @@ func restore_unifi_ap152_ap(t Target) {
 			}
 		}
 	}
-	fmt.Printf("\n%s restored to factory image, please power cycle device\n", t.host)
+	fmt.Printf("\n%s upgrade image, please waiting boot up\n", t.host)
 }
-func choose_restore_firmwire() {
+func choose_upgrade_firmware() {
 	// targets is put together in list_scan_result
 	if len(targets) == 0 {
 		println("\nNo supported 3rd-party devices found")
@@ -386,12 +322,12 @@ func choose_restore_firmwire() {
 
 	var choice int
 	for {
-		println("\nChoose which device to restore(ctrl-C to exist):")
+		println("\nChoose which device to upgrade(ctrl-C to exist):")
 		if len(targets) > 1 {
 			println("[0]. All devices")
 		}
 		for i, d := range targets {
-			fmt.Printf("[%d]. %s %s %s %s\n", i+1, d.host, d.mac, d.Name, d.SWver)
+			fmt.Printf("[%d]. %s %s %s %s %s\n", i+1, d.host, d.mac, d.Name, d.SWver, d.LatestSW)
 		}
 
 		if len(targets) > 1 {
@@ -424,11 +360,11 @@ func choose_restore_firmwire() {
 		var s sync.WaitGroup
 		for _, t := range targets {
 			s.Add(1)
-			go restore_one_device(t, &s)
+			go upgrade_one_device(t, &s)
 		}
 		s.Wait()
 	} else {
-		restore_one_device(targets[choice-1], nil)
+		upgrade_one_device(targets[choice-1], nil)
 	}
 }
 func scan_local_subnet() {
@@ -487,7 +423,7 @@ func main() {
 
 	list_scan_result()
 
-	choose_restore_firmwire()
+	choose_upgrade_firmware()
 
 	//list_oakdev_csv ()
 
