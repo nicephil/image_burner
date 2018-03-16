@@ -411,7 +411,18 @@ func init() {
 	log.Set_level("error")
 }
 
+func cleanup() {
+	cmd := exec.Command("/bin/sh", "-c", "rm -rf *.tar.gz *.txt")
+	_, err := cmd.Output()
+	if err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
+}
+
 func main() {
+
+	cleanup()
 
 	println(Banner_start)
 
