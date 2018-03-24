@@ -8,6 +8,7 @@ import (
 	"image_burner/util"
 	"net"
 	"os"
+	"os/exec"
 	"strconv"
 	"strings"
 	"sync"
@@ -18,6 +19,8 @@ import (
  * global vars
  */
 var netlist []Subnet
+var convert_targets []Target
+var upgrade_targets []Target
 
 const Banner_start = `
 Oakridge Firmware Update Utility, Ver 1.01, (c) Oakridge Networks, Inc. 2018
@@ -57,16 +60,41 @@ type AP_SEAP380 struct {
 	Devname       string
 	Board_SN      string // serial number
 	Manufact_date string
+	LatestFW      string
 }
 type UBNT_AP struct {
-	Mac     string
-	IPv4    string
-	HWmodel string
-	SWver   string
+	Mac      string
+	IPv4     string
+	HWmodel  string
+	SWver    string
+	LatestFW string
 }
 
 func (d *UBNT_AP) OneLineSummary() string {
-	return fmt.Sprintf("%-12s%-16s%-18s%-16s%s", "Ubiquiti", d.HWmodel, d.Mac, d.IPv4, d.SWver)
+	return fmt.Sprintf("%-12s%-16s%-18s%-16s%-25s%s", "Ubiquiti", d.HWmodel, d.Mac, d.IPv4, d.SWver, d.LatestFW)
+}
+
+func (d *UBNT_AP) Get_latest_version() (version string) {
+	version = ""
+	d.LatestFW = ""
+	url := "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-swversion.txt"
+	localfile := "latest-swversion-ap152.txt"
+
+	if err := oakUtility.On_demand_download(localfile, url); err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
+
+	cmd := exec.Command("/bin/sh", "-c", "cat "+localfile)
+	out, err := cmd.Output()
+	if err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
+	version = strings.TrimSpace(string(out))
+
+	d.LatestFW = version
+	return
 }
 
 type Oakridge_Device struct {
@@ -75,17 +103,63 @@ type Oakridge_Device struct {
 	HWname   string
 	IPv4     string
 	Firmware string // this is bootloader version
+	LatestFW string
+}
+
+func (d *Oakridge_Device) Get_latest_version() (version string) {
+	version = ""
+	d.LatestFW = ""
+	url := "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-swversion.txt"
+	localfile := "latest-swversion-ap152.txt"
+
+	if err := oakUtility.On_demand_download(localfile, url); err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
+
+	cmd := exec.Command("/bin/sh", "-c", "cat "+localfile)
+	out, err := cmd.Output()
+	if err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
+	version = strings.TrimSpace(string(out))
+
+	d.LatestFW = version
+	return
 }
 
 func (d *Oakridge_Device) OneLineSummary() string {
-	return fmt.Sprintf("%-12s%-16s%-18s%-16s%s", "Oakridge", d.HWname, d.Mac, d.IPv4, d.Firmware)
+	return fmt.Sprintf("%-12s%-16s%-18s%-16s%-25s%s", "Oakridge", d.HWname, d.Mac, d.IPv4, d.Firmware, d.LatestFW)
 }
 func (d *AP_SEAP380) OneLineSummary() string {
-	return fmt.Sprintf("%-12s%-16s%-18s%-16s%s", d.Vendor, d.OEM, d.Mac, d.IPv4, d.Manufact_date+" "+d.Board_SN)
+	return fmt.Sprintf("%-12s%-16s%-18s%-16s%-25s%s", d.Vendor, d.OEM, d.Mac, d.IPv4, d.Manufact_date+" "+d.Board_SN, d.LatestFW)
+}
+func (d *AP_SEAP380) Get_latest_version() (version string) {
+	version = ""
+	d.LatestFW = ""
+	url := "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-swversion.txt"
+	localfile := "latest-swversion-ap152.txt"
+
+	if err := oakUtility.On_demand_download(localfile, url); err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
+
+	cmd := exec.Command("/bin/sh", "-c", "cat "+localfile)
+	out, err := cmd.Output()
+	if err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
+	version = strings.TrimSpace(string(out))
+
+	d.LatestFW = version
+	return
 }
 func Oakdev_PrintHeader() {
-	fmt.Printf("\n%-4s %-12s%-16s%-18s%-16s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Description")
-	fmt.Printf("%s\n", strings.Repeat("=", 96))
+	fmt.Printf("\n%-4s %-12s%-16s%-18s%-16s%-25s%s\n", "No.", "SW", "HW", "Mac", "IPv4", "Description", "Latest-OakFirmware")
+	fmt.Printf("%s\n", strings.Repeat("=", 116))
 }
 
 type Converted_AP struct {
@@ -267,8 +341,10 @@ func Is_oakridge_dev(c oakUtility.SSHClient) *Oakridge_Device {
 	dev.Firmware = strings.TrimSpace(string(buf))
 
 	dev.IPv4 = c.IPv4
+	dev.LatestFW = dev.Get_latest_version()
 	return &dev
 }
+
 func Is_ubnt_ap(c oakUtility.SSHClient) *UBNT_AP {
 
 	if err := c.Open("ubnt", "ubnt"); err != nil {
@@ -313,8 +389,10 @@ func Is_ubnt_ap(c oakUtility.SSHClient) *UBNT_AP {
 	}
 	dev.SWver = strings.TrimSpace(string(buf))
 	dev.IPv4 = c.IPv4
+	dev.LatestFW = dev.Get_latest_version()
 	return &dev
 }
+
 func Is_ap_seap380(c oakUtility.SSHClient) *AP_SEAP380 {
 
 	if err := c.Open("admin", "admin"); err != nil {
@@ -363,6 +441,7 @@ func Is_ap_seap380(c oakUtility.SSHClient) *AP_SEAP380 {
 	}
 
 	dev.IPv4 = c.IPv4
+	dev.LatestFW = dev.Get_latest_version()
 	log.Debug.Printf("%v\n", dev)
 	return &dev
 }
@@ -373,26 +452,49 @@ func list_scan_result() {
 	for _, n := range netlist {
 		for _, o := range n.Oak_dev_list {
 			cnt++
-			fmt.Printf(" %-3d %s\n", cnt, o.OneLineSummary())
+			if o.Firmware != o.LatestFW {
+				fmt.Printf("✓%-3d %s\n", cnt, o.OneLineSummary())
+
+				switch o.HWmodel {
+				case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923, A820, A822, W282, A920, WL8200_I2:
+					t := Target{host: o.IPv4, mac: o.Mac, user: "root", pass: "oakridge", HWmodel: o.HWmodel,
+						Name: o.HWname, SWver: o.Firmware, LatestSW: o.LatestFW} // we put together the target list, so later it can just be used directly
+					upgrade_targets = append(upgrade_targets, t)
+				}
+			} else {
+				fmt.Printf("%-3d %s\n", cnt, o.OneLineSummary())
+			}
 		}
 		for _, u := range n.UBNT_ap_list {
 			cnt++
 			fmt.Printf("✓%-3d %s\n", cnt, u.OneLineSummary())
+			switch u.HWmodel {
+			case AC_LITE, AC_LR, AC_PRO, UBNT_ERX:
+				t := Target{host: u.IPv4, mac: u.Mac, user: "ubnt", pass: "ubnt", HWmodel: u.HWmodel, LatestSW: u.LatestFW}
+				convert_targets = append(convert_targets, t)
+			}
 		}
 		for _, s := range n.seap380_list {
 			cnt++
 			fmt.Printf("✓%-3d %s\n", cnt, s.OneLineSummary())
+			t := Target{host: s.IPv4, mac: s.Mac, user: "admin", pass: "admin", HWmodel: s.OEM, LatestSW: s.LatestFW}
+			convert_targets = append(convert_targets, t)
 		}
 	}
+
+	return
 }
 
 type Target struct {
-	host    string
-	mac     string
-	user    string
-	pass    string
-	HWmodel string
-	result  string
+	host     string
+	mac      string
+	user     string
+	pass     string
+	Name     string
+	HWmodel  string
+	SWver    string
+	LatestSW string
+	result   string
 }
 
 var erx_imgs = map[string][]string{
@@ -611,38 +713,17 @@ func install_unifi_ap_img(t Target) error {
 	fmt.Printf("\n%s upgraded to Oakridge OS, please power cycle device\n", t.host)
 	return nil
 }
-func install_oak_firmwire() {
-	var targets []Target
-
-	// prepare the list
-	for _, n := range netlist {
-		for _, u := range n.UBNT_ap_list {
-			switch u.HWmodel {
-			case AC_LITE, AC_LR, AC_PRO, UBNT_ERX:
-				t := Target{host: u.IPv4, mac: u.Mac, user: "ubnt", pass: "ubnt", HWmodel: u.HWmodel}
-				targets = append(targets, t)
-			}
-		}
-		for _, d := range n.seap380_list {
-			t := Target{host: d.IPv4, mac: d.Mac, user: "admin", pass: "admin", HWmodel: d.OEM}
-			targets = append(targets, t)
-		}
-	}
-
-	if len(targets) == 0 {
-		println("\nNo supported 3rd-party device found")
-		return
-	}
+func install_oak_firmware() {
 
 	var choice int
 	for {
 		println("\nChoose which device to convert(ctrl-C to exist):")
 		println("[0]. All devices")
-		for i, d := range targets {
-			fmt.Printf("[%d]. %-16s %-18s %s\n", i+1, d.host, d.mac, d.HWmodel)
+		for i, d := range convert_targets {
+			fmt.Printf("[%d]. %-16s %-18s %s %s\n", i+1, d.host, d.mac, d.HWmodel, d.LatestSW)
 		}
 
-		fmt.Printf("Please choose: [0~%d]\n", len(targets))
+		fmt.Printf("Please choose: [0~%d]\n", len(convert_targets))
 		r := bufio.NewReader(os.Stdin)
 		input, err := r.ReadString('\n')
 		if err != nil {
@@ -655,7 +736,7 @@ func install_oak_firmwire() {
 			continue
 		}
 
-		if choice >= 0 && choice <= len(targets) {
+		if choice >= 0 && choice <= len(convert_targets) {
 			oakUtility.ClearLine()
 			fmt.Printf("You choose: %d\n", choice)
 			break
@@ -666,13 +747,13 @@ func install_oak_firmwire() {
 
 	if choice == 0 {
 		var s sync.WaitGroup
-		for _, t := range targets {
+		for _, t := range convert_targets {
 			s.Add(1)
 			go install_one_device(t, &s)
 		}
 		s.Wait()
 	} else {
-		install_one_device(targets[choice-1], nil)
+		install_one_device(convert_targets[choice-1], nil)
 	}
 }
 
@@ -760,6 +841,53 @@ func write_OakAP_csv() {
 func init() {
 	log = oakUtility.New_OakLogger()
 	log.Set_level("error")
+	cleanup()
+}
+
+const (
+	OPERATION_INVALID = -1
+	OPERATION_CONVERT = 1
+	OPERATION_UPGRADE = 2
+)
+
+func select_operation() (choice int) {
+	choice = OPERATION_INVALID
+	for {
+		println("\nChoose what do you want to do(ctrl-C to exist):")
+		fmt.Printf("[%d]. Convert Vendor Devices to OakFirmware\n", OPERATION_CONVERT)
+		fmt.Printf("[%d]. Upgrade Oak Devices to Latest OakFirmware\n", OPERATION_UPGRADE)
+
+		fmt.Printf("Please choose: [0~1]\n")
+		r := bufio.NewReader(os.Stdin)
+		input, err := r.ReadString('\n')
+		if err != nil {
+			println(err.Error())
+			continue
+		}
+
+		if choice, err = strconv.Atoi(strings.TrimSpace(input)); err != nil {
+			println(err.Error())
+			continue
+		}
+
+		if choice > 0 && choice <= 2 {
+			oakUtility.ClearLine()
+			fmt.Printf("You choose: %d\n", choice)
+			break
+		}
+
+		fmt.Printf("Invalid choicse: %d\n", choice)
+	}
+	return
+}
+
+func cleanup() {
+	cmd := exec.Command("/bin/sh", "-c", "rm -rf *.tar.gz *.txt")
+	_, err := cmd.Output()
+	if err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
 }
 
 func main() {
@@ -774,9 +902,179 @@ func main() {
 
 	list_scan_result()
 
-	install_oak_firmwire()
+	upgrade_cnt := len(upgrade_targets)
+	convert_cnt := len(convert_targets)
+	operation_choice := OPERATION_INVALID
+	if upgrade_cnt == 0 && convert_cnt == 0 {
+		println("\nNo supported 3rd-party device found")
+		operation_choice = OPERATION_INVALID
+	} else if upgrade_cnt == 0 {
+		println("\nOnly can be converted devices found")
+		operation_choice = OPERATION_CONVERT
+	} else if convert_cnt == 0 {
+		println("\nOnly can be upgraded devices found")
+		operation_choice = OPERATION_UPGRADE
+	} else {
+		operation_choice = select_operation()
+	}
 
-	write_OakAP_csv()
+	switch operation_choice {
+	case OPERATION_CONVERT:
+		println("\n**To do convert Vendor devices now**\n")
+		install_oak_firmware()
+		write_OakAP_csv()
+	case OPERATION_UPGRADE:
+		println("\n**To do upgrade Oak devices now**\n")
+		upgrade_oak_firmware()
+	}
 
 	println(Banner_end)
+}
+
+var local_imgfile = map[string]string{
+	AC_LITE: "",
+	AC_LR:   "",
+	AC_PRO:  "",
+}
+
+func upgrade_one_device(t Target, s *sync.WaitGroup) {
+	if s != nil {
+		defer s.Done()
+	}
+
+	switch t.HWmodel {
+	case AC_LITE, AC_LR, AC_PRO, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923, A820, A822, W282, A920, WL8200_I2:
+		switch t.HWmodel {
+		case AC_LITE_OLD:
+			t.HWmodel = AC_LITE
+		case AC_LR_OLD:
+			t.HWmodel = AC_LR
+		case AC_PRO_OLD:
+			t.HWmodel = AC_PRO
+		}
+		upgrade_unifi_ap152_ap(t)
+	case UBNT_ERX, UBNT_ERX_OLD:
+		switch t.HWmodel {
+		case UBNT_ERX_OLD:
+			t.HWmodel = UBNT_ERX
+		}
+		upgrade_unifi_ap152_ap(t)
+	default:
+		fmt.Printf("unsupport model %s\n", t.HWmodel)
+		return
+	}
+}
+
+var ap_origin_imgs = map[string][]string{ //NOTE these 3 are use same img
+	AC_LITE:   {"aclite.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-sysupgrade.bin.tar.gz"},
+	AC_LR:     {"aclr.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-sysupgrade.bin.tar.gz"},
+	AC_PRO:    {"acpro.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A923:      {"a923.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A820:      {"a820.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A822:      {"a822.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	W282:      {"w282.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A920:      {"a920.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	WL8200_I2: {"wl8200_i2.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	UBNT_ERX:  {"ubnterx.tar.gz", "http://image.oakridge.vip:8000/images/ap/ubnterx/sysloader/latest-sysupgrade.bin.tar.gz"},
+}
+
+func upgrade_unifi_ap152_ap(t Target) {
+
+	localfile := ap_origin_imgs[t.HWmodel][0]
+	url := ap_origin_imgs[t.HWmodel][1]
+
+	if err := oakUtility.On_demand_download(localfile, url); err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
+
+	p := spinner.StartNew("Upgrade " + t.host + " " + t.HWmodel + " ...")
+	defer p.Stop()
+
+	c := oakUtility.New_SSHClient(t.host)
+	if err := c.Open("root", "oakridge"); err != nil {
+		println(err)
+		return
+	}
+	defer c.Close()
+
+	remotefile := "/tmp/oak.tar.gz"
+	_, err := c.Scp(localfile, remotefile, "0644")
+	if err != nil {
+		println(err)
+		return
+	}
+
+	fmt.Printf("\nWrite flash, MUST NOT POWER OFF, it might take several minutes!\n")
+
+	var cmds = [][]string{
+		{"echo 'Auto Upgrade Now...'|logger -p2", "optional"},
+		{"stop", "optional"},
+		{"/etc/init.d/capwap stop", "optional"},
+		{"/etc/init.d/handle_cloud stop", "optional"},
+		{"/etc/init.d/wifidog stop", "optional"},
+		{"/etc/init.d/arpwatch stop", "optional"},
+		{"tar xzf " + remotefile + " -C /tmp", "mandatory"},
+		{"rm -rvf " + remotefile, "mandatory"},
+		{"sysupgrade -n /tmp/*-squashfs-sysupgrade.bin", "mandatory"},
+	}
+	for _, cmd := range cmds {
+		buf, err := c.One_cmd(cmd[0])
+		if err != nil {
+			log.Debug.Printf("\n%v: %s <%s>\n", cmd, err.Error(), string(buf))
+			if cmd[1] == "mandatory" {
+				return
+			}
+		}
+	}
+	fmt.Printf("\n%s upgrade image, please waiting boot up\n", t.host)
+}
+
+func upgrade_oak_firmware() {
+	var choice int
+	for {
+		println("\nChoose which device to upgrade(ctrl-C to exist):")
+		if len(upgrade_targets) > 1 {
+			println("[0]. All devices")
+		}
+		for i, d := range upgrade_targets {
+			fmt.Printf("[%d]. %s %s %s %s %s\n", i+1, d.host, d.mac, d.Name, d.SWver, d.LatestSW)
+		}
+
+		if len(upgrade_targets) > 1 {
+			fmt.Printf("Please choose: [0~%d]\n", len(upgrade_targets))
+		} else {
+			fmt.Printf("Please choose: [%d]\n", len(upgrade_targets))
+		}
+		r := bufio.NewReader(os.Stdin)
+		input, err := r.ReadString('\n')
+		if err != nil {
+			println(err.Error())
+			continue
+		}
+
+		if choice, err = strconv.Atoi(strings.TrimSpace(input)); err != nil {
+			println(err.Error())
+			continue
+		}
+
+		if choice >= 0 && choice <= len(upgrade_targets) {
+			oakUtility.ClearLine()
+			fmt.Printf("You choose: %d\n", choice)
+			break
+		}
+
+		fmt.Printf("Invalid choicse: %d\n", choice)
+	}
+
+	if choice == 0 {
+		var s sync.WaitGroup
+		for _, t := range upgrade_targets {
+			s.Add(1)
+			go upgrade_one_device(t, &s)
+		}
+		s.Wait()
+	} else {
+		upgrade_one_device(upgrade_targets[choice-1], nil)
+	}
 }
