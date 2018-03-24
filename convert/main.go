@@ -19,7 +19,15 @@ import (
  */
 var netlist []Subnet
 
-const Banner_start = "\nOakridge Firmware Update Utility, Ver 1.01, (c) Oakridge Networks, Inc. 2018\n"
+const Banner_start = `
+Oakridge Firmware Update Utility, Ver 1.01, (c) Oakridge Networks, Inc. 2018
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+NOTE:
+1. Make sure AP in the scanned subnet, or can directly input the target subnet
+e.g. scan 192.168.1.0/24 subnet: ./convert 192.168.1.0/24
+2. Make sure AP is reset back to factory default state
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+`
 const Banner_end = "\nThanks for choose Oakridge Networks Inc.\n"
 
 var log oakUtility.OakLogger
@@ -28,8 +36,18 @@ var log oakUtility.OakLogger
 const AC_LITE = oakUtility.AC_LITE
 const AC_LR = oakUtility.AC_LR
 const AC_PRO = oakUtility.AC_PRO
-const UBNT_ERX = oakUtility.UBNT_ERX
+const UBNT_ERX_OLD = oakUtility.UBNT_ERX
 const SEAP380 = "SEAP-380"
+const AC_LITE_OLD = "ubntlite"
+const AC_LR_OLD = "ubntlr"
+const AC_PRO_OLD = "ubntpro"
+const UBNT_ERX = "EdgeRouter_ER-X"
+const A923 = "A923"
+const A820 = "A820"
+const A822 = "A822"
+const W282 = "W282"
+const A920 = "A920"
+const WL8200_I2 = "WL8200-I2"
 
 type AP_SEAP380 struct {
 	Mac           string
@@ -178,6 +196,32 @@ func Is_ubnt_erx(c oakUtility.SSHClient) *UBNT_AP {
 	return &dev
 }
 
+func Model_to_name(model string) (name string) {
+	switch model {
+	case AC_LITE, AC_LITE_OLD:
+		name = "UBNT_AC-LITE"
+		return
+	case AC_LR, AC_LR_OLD:
+		name = "UBNT_AC-LR"
+		return
+	case AC_PRO, AC_PRO_OLD:
+		name = "UBNT_AC-PRO"
+		return
+	case UBNT_ERX, UBNT_ERX_OLD:
+		name = "UBNT_EdgeRouter-X"
+		return
+	case WL8200_I2:
+		name = "DCN_WL8200-I2"
+		return
+	case A923:
+		name = "DCN_SEAP-380"
+		return
+	default:
+		name = "QTS_" + model
+		return
+	}
+}
+
 func Is_oakridge_dev(c oakUtility.SSHClient) *Oakridge_Device {
 
 	if err := c.Open("root", "oakridge"); err != nil {
@@ -206,14 +250,19 @@ func Is_oakridge_dev(c oakUtility.SSHClient) *Oakridge_Device {
 	buf, err = c.One_cmd("uci get productinfo.productinfo.model")
 	if err != nil {
 		log.Debug.Printf("%s: %s\n", c.IPv4, err.Error())
-		return nil
+		dev.HWname = Model_to_name(dev.HWmodel)
+	} else {
+		dev.HWname = strings.TrimSpace(string(buf))
 	}
-	dev.HWname = strings.TrimSpace(string(buf))
 
 	buf, err = c.One_cmd("uci get productinfo.productinfo.bootversion")
 	if err != nil {
 		log.Debug.Printf("%s: %s\n", c.IPv4, err.Error())
-		return nil
+		buf, err = c.One_cmd("uci get productinfo.productinfo.swversion")
+		if err != nil {
+			log.Debug.Printf("uci get productinfo.productinfo.swversion: %s\n", err.Error())
+			return nil
+		}
 	}
 	dev.Firmware = strings.TrimSpace(string(buf))
 

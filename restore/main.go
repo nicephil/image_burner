@@ -112,6 +112,32 @@ func (s *Subnet) OneLineSummary() {
 	fmt.Printf("✓ %s: %d Oakridge devices\n", s.Net, len(s.Oak_dev_list))
 }
 
+func Model_to_name(model string) (name string) {
+	switch model {
+	case AC_LITE, AC_LITE_OLD:
+		name = "UBNT_AC-LITE"
+		return
+	case AC_LR, AC_LR_OLD:
+		name = "UBNT_AC-LR"
+		return
+	case AC_PRO, AC_PRO_OLD:
+		name = "UBNT_AC-PRO"
+		return
+	case UBNT_ERX, UBNT_ERX_OLD:
+		name = "UBNT_EdgeRouter-X"
+		return
+	case WL8200_I2:
+		name = "DCN_WL8200-I2"
+		return
+	case A923:
+		name = "DCN_SEAP-380"
+		return
+	default:
+		name = "QTS_" + model
+		return
+	}
+}
+
 func Is_oakridge_dev(c oakUtility.SSHClient) *Oakridge_Device {
 
 	if err := c.Open("root", "oakridge"); err != nil {
@@ -140,14 +166,19 @@ func Is_oakridge_dev(c oakUtility.SSHClient) *Oakridge_Device {
 	buf, err = c.One_cmd("uci get productinfo.productinfo.model")
 	if err != nil {
 		log.Debug.Printf("uci get productinfo.productinfo.model: %s\n", err.Error())
-		return nil
+		dev.Name = Model_to_name(dev.Model)
+	} else {
+		dev.Name = strings.TrimSpace(string(buf))
 	}
-	dev.Name = strings.TrimSpace(string(buf))
 
 	buf, err = c.One_cmd("uci get productinfo.productinfo.bootversion")
 	if err != nil {
-		log.Debug.Printf("uci get productinfo.productinfo.swversion: %s\n", err.Error())
-		return nil
+		log.Debug.Printf("uci get productinfo.productinfo.bootversion: %s\n", err.Error())
+		buf, err = c.One_cmd("uci get productinfo.productinfo.swversion")
+		if err != nil {
+			log.Debug.Printf("uci get productinfo.productinfo.swversion: %s\n", err.Error())
+			return nil
+		}
 	}
 	dev.Firmware = strings.TrimSpace(string(buf))
 
