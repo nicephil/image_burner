@@ -36,23 +36,24 @@ const Banner_end = "\nThanks for choose Oakridge Networks Inc.\n"
 var log oakUtility.OakLogger
 
 // NOTE:  ac-lite/ac-lr/ac-pro share the same img, for handy program, just list them all
-const AC_LITE = oakUtility.AC_LITE
-const AC_LR = oakUtility.AC_LR
-const AC_PRO = oakUtility.AC_PRO
-const UBNT_ERX_OLD = oakUtility.UBNT_ERX
-const SEAP380 = "SEAP-380"
-const AC_LITE_OLD = "ubntlite"
-const AC_LR_OLD = "ubntlr"
-const AC_PRO_OLD = "ubntpro"
-const UBNT_ERX = "EdgeRouter_ER-X"
-const A923 = "A923"
-const A820 = "A820"
-const A822 = "A822"
-const W282 = "W282"
-const A920 = "A920"
-const WL8200_I2 = "WL8200-I2"
+const (
+	AC_LITE      = oakUtility.AC_LITE
+	AC_LR        = oakUtility.AC_LR
+	AC_PRO       = oakUtility.AC_PRO
+	UBNT_ERX_OLD = oakUtility.UBNT_ERX
+	AC_LITE_OLD  = "ubntlite"
+	AC_LR_OLD    = "ubntlr"
+	AC_PRO_OLD   = "ubntpro"
+	UBNT_ERX     = "EdgeRouter_ER-X"
+	A923         = "A923"
+	A820         = "A820"
+	A822         = "A822"
+	W282         = "W282"
+	A920         = "A920"
+	WL8200_I2    = "WL8200-I2"
+)
 
-type AP_SEAP380 struct {
+type AP_QTS struct {
 	Mac           string
 	IPv4          string
 	Vendor        string
@@ -62,6 +63,7 @@ type AP_SEAP380 struct {
 	Manufact_date string
 	LatestFW      string
 }
+
 type UBNT_AP struct {
 	Mac      string
 	IPv4     string
@@ -132,10 +134,12 @@ func (d *Oakridge_Device) Get_latest_version() (version string) {
 func (d *Oakridge_Device) OneLineSummary() string {
 	return fmt.Sprintf("%-12s%-16s%-18s%-16s%-25s%s", "Oakridge", d.HWname, d.Mac, d.IPv4, d.Firmware, d.LatestFW)
 }
-func (d *AP_SEAP380) OneLineSummary() string {
+
+func (d *AP_QTS) OneLineSummary() string {
 	return fmt.Sprintf("%-12s%-16s%-18s%-16s%-25s%s", d.Vendor, d.OEM, d.Mac, d.IPv4, d.Manufact_date+" "+d.Board_SN, d.LatestFW)
 }
-func (d *AP_SEAP380) Get_latest_version() (version string) {
+
+func (d *AP_QTS) Get_latest_version() (version string) {
 	version = ""
 	d.LatestFW = ""
 	url := "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-swversion.txt"
@@ -173,7 +177,7 @@ type Subnet struct {
 	holes        []net.IP // skip those ip-addr
 	Oak_dev_list []*Oakridge_Device
 	UBNT_ap_list []*UBNT_AP
-	seap380_list []*AP_SEAP380
+	qts_list     []*AP_QTS
 	batch        sync.WaitGroup // this to wait all host finish before exit
 }
 
@@ -220,9 +224,9 @@ func (s *Subnet) scan_one(host string) {
 	} else if dev := Is_ubnt_erx(c); dev != nil {
 		log.Info.Printf("%s is Ubiqiti ERX\n", c.IPv4)
 		s.UBNT_ap_list = append(s.UBNT_ap_list, dev)
-	} else if dev := Is_ap_seap380(c); dev != nil {
-		log.Info.Printf("%s is SEAP-380\n", c.IPv4)
-		s.seap380_list = append(s.seap380_list, dev)
+	} else if dev := Is_ap_QTS(c); dev != nil {
+		log.Info.Printf("%s is QTS\n", c.IPv4)
+		s.qts_list = append(s.qts_list, dev)
 	}
 }
 
@@ -393,7 +397,7 @@ func Is_ubnt_ap(c oakUtility.SSHClient) *UBNT_AP {
 	return &dev
 }
 
-func Is_ap_seap380(c oakUtility.SSHClient) *AP_SEAP380 {
+func Is_ap_QTS(c oakUtility.SSHClient) *AP_QTS {
 
 	if err := c.Open("admin", "admin"); err != nil {
 		log.Debug.Printf("fail login %s: %s\n", c.IPv4, err.Error())
@@ -408,7 +412,7 @@ func Is_ap_seap380(c oakUtility.SSHClient) *AP_SEAP380 {
 	}
 
 	// now we parse the <key>=<value>
-	var dev AP_SEAP380
+	var dev AP_QTS
 	tvs := strings.Split(strings.TrimSpace(string(buf)), "\n")
 	for _, t := range tvs {
 		kv := strings.Split(t, "=")
@@ -436,7 +440,14 @@ func Is_ap_seap380(c oakUtility.SSHClient) *AP_SEAP380 {
 		}
 	}
 
-	if dev.OEM != "SEAP-380" {
+	switch dev.Devname {
+	case A820, A822, A920, W282:
+		dev.OEM = "QTS_" + dev.Devname
+	case WL8200_I2:
+		dev.OEM = "DCN_" + dev.Devname
+	case A923:
+		dev.OEM = "DCN_SEAP380"
+	default:
 		return nil
 	}
 
@@ -445,6 +456,7 @@ func Is_ap_seap380(c oakUtility.SSHClient) *AP_SEAP380 {
 	log.Debug.Printf("%v\n", dev)
 	return &dev
 }
+
 func list_scan_result() {
 	cnt := 0
 
@@ -470,14 +482,14 @@ func list_scan_result() {
 			fmt.Printf("✓%-3d %s\n", cnt, u.OneLineSummary())
 			switch u.HWmodel {
 			case AC_LITE, AC_LR, AC_PRO, UBNT_ERX:
-				t := Target{host: u.IPv4, mac: u.Mac, user: "ubnt", pass: "ubnt", HWmodel: u.HWmodel, LatestSW: u.LatestFW}
+				t := Target{host: u.IPv4, mac: u.Mac, user: "ubnt", pass: "ubnt", HWmodel: u.HWmodel, Name: ("UBNT_" + u.HWmodel), LatestSW: u.LatestFW}
 				convert_targets = append(convert_targets, t)
 			}
 		}
-		for _, s := range n.seap380_list {
+		for _, s := range n.qts_list {
 			cnt++
 			fmt.Printf("✓%-3d %s\n", cnt, s.OneLineSummary())
-			t := Target{host: s.IPv4, mac: s.Mac, user: "admin", pass: "admin", HWmodel: s.OEM, LatestSW: s.LatestFW}
+			t := Target{host: s.IPv4, mac: s.Mac, user: "admin", pass: "admin", HWmodel: s.Devname, Name: s.OEM, LatestSW: s.LatestFW}
 			convert_targets = append(convert_targets, t)
 		}
 	}
@@ -601,7 +613,7 @@ func install_one_device(t Target, s *sync.WaitGroup) {
 		if err == nil {
 			record_converted_ap(t.mac)
 		}
-	case SEAP380:
+	case A820, A822, W282, A920, A923, WL8200_I2:
 		err := install_via_sysupgrade(t)
 		if err == nil {
 			record_converted_ap(t.mac)
@@ -615,7 +627,12 @@ func install_one_device(t Target, s *sync.WaitGroup) {
 }
 
 var ap152_imgs = map[string][]string{
-	SEAP380: {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A820:      {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A822:      {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	W282:      {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A920:      {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A923:      {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	WL8200_I2: {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
 }
 
 func install_via_sysupgrade(t Target) error {
@@ -720,7 +737,7 @@ func install_oak_firmware() {
 		println("\nChoose which device to convert(ctrl-C to exist):")
 		println("[0]. All devices")
 		for i, d := range convert_targets {
-			fmt.Printf("[%d]. %-16s %-18s %s %s\n", i+1, d.host, d.mac, d.HWmodel, d.LatestSW)
+			fmt.Printf("[%d]. %-16s %-18s %s %s\n", i+1, d.host, d.mac, d.Name, d.LatestSW)
 		}
 
 		fmt.Printf("Please choose: [0~%d]\n", len(convert_targets))
