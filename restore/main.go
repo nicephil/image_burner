@@ -20,7 +20,15 @@ import (
 var netlist []Subnet
 var targets []Target
 
-const Banner_start = "\nFirmware Restore Utility, Ver 1.01, (c) Oakridge Networks, Inc. 2018\n"
+const Banner_start = `
+Firmware Restore Utility, Ver 1.01, (c) Oakridge Networks, Inc. 2018
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+NOTE:
+1. Make sure AP in the scanned subnet, or can directly input the target subnet
+e.g. scan 192.168.1.0/24 subnet: ./restore 192.168.1.0/24
+2. Make sure AP is reset back to factory default state
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+`
 const Banner_end = "\nThanks for choose Oakridge Networks Inc.\n"
 
 var log oakUtility.OakLogger
