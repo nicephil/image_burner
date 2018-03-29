@@ -79,8 +79,8 @@ func (d *UBNT_AP) OneLineSummary() string {
 func (d *UBNT_AP) Get_latest_version() (version string) {
 	version = ""
 	d.LatestFW = ""
-	url := "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-swversion.txt"
-	localfile := "latest-swversion-ap152.txt"
+	url := "http://image.oakridge.vip:8000/images/ap/ubntunifi/sysloader/latest-swversion.txt"
+	localfile := "latest-swversion-ubnt.txt"
 
 	if err := oakUtility.On_demand_download(localfile, url); err != nil {
 		log.Error.Println(err.Error())
@@ -112,7 +112,7 @@ func (d *Oakridge_Device) Get_latest_version() (version string) {
 	version = ""
 	d.LatestFW = ""
 	url := "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-swversion.txt"
-	localfile := "latest-swversion-ap152.txt"
+	localfile := "latest-swversion-oakridge.txt"
 
 	if err := oakUtility.On_demand_download(localfile, url); err != nil {
 		log.Error.Println(err.Error())
