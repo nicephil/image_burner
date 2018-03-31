@@ -1033,7 +1033,7 @@ func upgrade_unifi_ap152_ap(t Target) {
 		{"/etc/init.d/arpwatch stop", "optional"},
 		{"tar xzf " + remotefile + " -C /tmp", "mandatory"},
 		{"rm -rvf " + remotefile, "mandatory"},
-		{"sysupgrade -n /tmp/*-squashfs-sysupgrade.bin", "mandatory"},
+		{"sysupgrade -n /tmp/*-squashfs-sysupgrade.bin", "optional"},
 	}
 	for _, cmd := range cmds {
 		buf, err := c.One_cmd(cmd[0])
