@@ -859,6 +859,7 @@ func init() {
 	log = oakUtility.New_OakLogger()
 	log.Set_level("error")
 	cleanup()
+	prepare_sshconf()
 }
 
 const (
@@ -900,6 +901,15 @@ func select_operation() (choice int) {
 
 func cleanup() {
 	cmd := exec.Command("/bin/sh", "-c", "rm -rf *.tar.gz *.txt")
+	_, err := cmd.Output()
+	if err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
+}
+
+func prepare_sshconf() {
+	cmd := exec.Command("/bin/sh", "-c", "mkdir -p ~/.ssh;[ -z \"$(sed -n '/TCPKeepAlive.*yes/p' ~/.ssh/config 2>/dev/null)\" ] && sed -i '1 iTCPKeepAlive yes' ~/.ssh/config")
 	_, err := cmd.Output()
 	if err != nil {
 		log.Error.Println(err.Error())
@@ -1033,13 +1043,13 @@ func upgrade_unifi_ap152_ap(t Target) {
 		{"/etc/init.d/arpwatch stop", "optional"},
 		{"tar xzf " + remotefile + " -C /tmp", "mandatory"},
 		{"rm -rvf " + remotefile, "mandatory"},
-		{"sysupgrade -n /tmp/*-squashfs-sysupgrade.bin", "optional"},
+		{"sysupgrade -n /tmp/*-squashfs-sysupgrade.bin", "mandatory"},
 	}
 	for _, cmd := range cmds {
 		buf, err := c.One_cmd(cmd[0])
 		if err != nil {
 			log.Debug.Printf("\n%v: %s <%s>\n", cmd, err.Error(), string(buf))
-			if cmd[1] == "mandatory" {
+			if err.Error() != "EOF" && cmd[1] == "mandatory" {
 				return
 			}
 		}

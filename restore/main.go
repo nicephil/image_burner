@@ -396,12 +396,12 @@ func restore_unifi_ap152_ap(t Target) {
 
 	var cmds = [][]string{
 		{"stop", "optional"},
-		{"tar xzf " + remotefile + " -C /tmp", "mandatory"},
-		{"rm -rvf " + remotefile, "mandatory"},
 		{"/etc/init.d/capwap stop", "optional"},
 		{"/etc/init.d/handle_cloud stop", "optional"},
 		{"/etc/init.d/wifidog stop", "optional"},
 		{"/etc/init.d/arpwatch stop", "optional"},
+		{"tar xzf " + remotefile + " -C /tmp", "mandatory"},
+		{"rm -rvf " + remotefile, "mandatory"},
 		{"mtd write /tmp/firmware.bin firmware", "mandatory"},
 		{"reboot", "mandatory"},
 	}
