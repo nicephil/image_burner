@@ -6,9 +6,11 @@ import (
 	"image_burner/ping"
 	"image_burner/spinner"
 	"image_burner/util"
+	"io/ioutil"
 	"net"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -87,13 +89,12 @@ func (d *UBNT_AP) Get_latest_version() (version string) {
 		return
 	}
 
-	cmd := exec.Command("/bin/sh", "-c", "cat "+localfile)
-	out, err := cmd.Output()
+	dat, err := ioutil.ReadFile(localfile)
 	if err != nil {
 		log.Error.Println(err.Error())
 		return
 	}
-	version = strings.TrimSpace(string(out))
+	version = strings.TrimSpace(string(dat))
 
 	d.LatestFW = version
 	return
@@ -119,13 +120,12 @@ func (d *Oakridge_Device) Get_latest_version() (version string) {
 		return
 	}
 
-	cmd := exec.Command("/bin/sh", "-c", "cat "+localfile)
-	out, err := cmd.Output()
+	dat, err := ioutil.ReadFile(localfile)
 	if err != nil {
 		log.Error.Println(err.Error())
 		return
 	}
-	version = strings.TrimSpace(string(out))
+	version = strings.TrimSpace(string(dat))
 
 	d.LatestFW = version
 	return
@@ -627,12 +627,12 @@ func install_one_device(t Target, s *sync.WaitGroup) {
 }
 
 var ap152_imgs = map[string][]string{
-	A820:      {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
-	A822:      {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
-	W282:      {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
-	A920:      {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
-	A923:      {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
-	WL8200_I2: {"oakridge.ap152.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A820:      {"oakridge.a820.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A822:      {"oakridge.a822.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	W282:      {"oakridge.w282.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A920:      {"oakridge.a920.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A923:      {"oakridge.a923.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	WL8200_I2: {"oakridge.wl8200_i2.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
 }
 
 func install_via_sysupgrade(t Target) error {
@@ -900,20 +900,14 @@ func select_operation() (choice int) {
 }
 
 func cleanup() {
-	cmd := exec.Command("/bin/sh", "-c", "rm -rf *.tar.gz *.txt")
-	_, err := cmd.Output()
-	if err != nil {
-		log.Error.Println(err.Error())
-		return
-	}
+	os.Remove("latest-swversion-oakridge.txt")
+	os.Remove("latest-swversion-ap152.txt")
+	os.Remove("latest-swversion-ubnt.txt")
 }
 
 func prepare_sshconf() {
-	cmd := exec.Command("/bin/sh", "-c", "mkdir -p ~/.ssh;[ -z \"$(sed -n '/TCPKeepAlive.*yes/p' ~/.ssh/config 2>/dev/null)\" ] && sed -i '1 iTCPKeepAlive yes' ~/.ssh/config")
-	_, err := cmd.Output()
-	if err != nil {
-		log.Error.Println(err.Error())
-		return
+	if runtime.GOOS != "windows" {
+		exec.Command("mkdir -p ~/.ssh;[ -z \"$(sed -n '/TCPKeepAlive.*yes/p' ~/.ssh/config 2>/dev/null)\" ] && sed -i '1 iTCPKeepAlive yes' ~/.ssh/config 2>/dev/null")
 	}
 }
 
