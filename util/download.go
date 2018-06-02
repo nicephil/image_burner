@@ -47,8 +47,8 @@ func On_demand_download(localfile string, url string) error {
 		} else {
 			_, err := os.Stat(localfile)
 			for _, err = os.Stat(localfile); os.IsNotExist(err); {
-				fmt.Printf("xxxxxxxxxxx %s\n", localfile)
-				time.Sleep(5 * time.Second)
+				time.Sleep(10 * time.Second)
+				fmt.Printf("wait for %s\n", localfile)
 				_, err = os.Stat(localfile)
 			}
 		}
