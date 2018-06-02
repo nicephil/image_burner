@@ -10,14 +10,15 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 )
 
 // WriteCounter counts the number of bytes written to it. It implements to the io.Writer
 // interface and we can pass this into io.TeeReader() which will report progress on each
 // write cycle.
 type WriteCounter struct {
-    Total uint64
-    Prefix_txt string
+	Total      uint64
+	Prefix_txt string
 }
 
 func (wc *WriteCounter) Write(p []byte) (int, error) {
@@ -37,14 +38,24 @@ func (wc WriteCounter) PrintProgress() {
 	fmt.Printf("\r%s%s (%d)", wc.Prefix_txt, humanize.Bytes(wc.Total), wc.Total)
 }
 
-func On_demand_download (localfile string, url string) error {
-    if _, err := os.Stat(localfile); os.IsNotExist(err) {
-        if err := DownloadFile (localfile, url , true, "Downloading "+localfile+"... "); err != nil {
-            return err
-        }
-    }
-    return nil
+func On_demand_download(localfile string, url string) error {
+	if _, err := os.Stat(localfile); os.IsNotExist(err) {
+		if _, err := os.Stat(localfile + ".tmp"); os.IsNotExist(err) {
+			if err := DownloadFile(localfile, url, true, "Downloading "+localfile+"... "); err != nil {
+				return err
+			}
+		} else {
+			_, err := os.Stat(localfile)
+			for _, err = os.Stat(localfile); os.IsNotExist(err); {
+				fmt.Printf("xxxxxxxxxxx %s\n", localfile)
+				time.Sleep(5 * time.Second)
+				_, err = os.Stat(localfile)
+			}
+		}
+	}
+	return nil
 }
+
 // DownloadFile will download a url to a local file. It's efficient because it will
 // write as it downloads and not load the whole file into memory. We pass an io.TeeReader
 // into Copy() to report progress on the download.
@@ -60,21 +71,21 @@ func DownloadFile(filepath string, url string, progress bool, prefix string) err
 	// Get the data
 	resp, err := http.Get(url)
 	if err != nil {
-	        out.Close()
+		out.Close()
 		return err
 	}
 	defer resp.Body.Close()
 
-    if progress == true {
-	    counter := &WriteCounter{Prefix_txt: prefix}
-	    _, err = io.Copy(out, io.TeeReader(resp.Body, counter))
-	    fmt.Print("\n")
-    } else {
-	    _, err = io.Copy(out, resp.Body)
-    }
+	if progress == true {
+		counter := &WriteCounter{Prefix_txt: prefix}
+		_, err = io.Copy(out, io.TeeReader(resp.Body, counter))
+		fmt.Print("\n")
+	} else {
+		_, err = io.Copy(out, resp.Body)
+	}
 	if err != nil {
-	    out.Close()
-	    return err
+		out.Close()
+		return err
 	}
 
 	out.Close()

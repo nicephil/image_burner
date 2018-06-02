@@ -875,7 +875,7 @@ func select_operation() (choice int) {
 		fmt.Printf("[%d]. Convert Vendor Devices to OakFirmware\n", OPERATION_CONVERT)
 		fmt.Printf("[%d]. Upgrade Oak Devices to Latest OakFirmware\n", OPERATION_UPGRADE)
 
-		fmt.Printf("Please choose: [0~1]\n")
+		fmt.Printf("Please choose: [1~2]\n")
 		r := bufio.NewReader(os.Stdin)
 		input, err := r.ReadString('\n')
 		if err != nil {
