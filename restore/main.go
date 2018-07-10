@@ -239,6 +239,25 @@ func ubnt_recover_img(host string, file string) error {
 		return err
 	}
 	defer c.Close()
+
+	var cmds = [][]string{
+		{"stop", "optional"},
+		{"/etc/init.d/supervisor stop", "optional"},
+		{"/etc/init.d/capwap stop", "optional"},
+		{"/etc/init.d/handle_cloud stop", "optional"},
+		{"/etc/init.d/wifidog stop", "optional"},
+		{"/etc/init.d/arpwatch stop", "optional"},
+	}
+	for _, cmd := range cmds {
+		buf, err := c.One_cmd(cmd[0])
+		if err != nil {
+			log.Debug.Printf("\n%v: %s <%s>\n", cmd, err.Error(), string(buf))
+			if cmd[1] == "mandatory" {
+				return err
+			}
+		}
+	}
+
 	if _, err := c.Scp(file, "/tmp/"+file, "0644"); err != nil {
 		return err
 	}
@@ -385,6 +404,24 @@ func restore_unifi_ap152_ap(t Target) {
 	}
 	defer c.Close()
 
+	var cmds = [][]string{
+		{"stop", "optional"},
+		{"/etc/init.d/supervisor stop", "optional"},
+		{"/etc/init.d/capwap stop", "optional"},
+		{"/etc/init.d/handle_cloud stop", "optional"},
+		{"/etc/init.d/wifidog stop", "optional"},
+		{"/etc/init.d/arpwatch stop", "optional"},
+	}
+	for _, cmd := range cmds {
+		buf, err := c.One_cmd(cmd[0])
+		if err != nil {
+			log.Debug.Printf("\n%v: %s <%s>\n", cmd, err.Error(), string(buf))
+			if cmd[1] == "mandatory" {
+				return
+			}
+		}
+	}
+
 	remotefile := "/tmp/oak.tar.gz"
 	_, err := c.Scp(localfile, remotefile, "0644")
 	if err != nil {
@@ -394,7 +431,7 @@ func restore_unifi_ap152_ap(t Target) {
 
 	fmt.Printf("\nWrite flash, MUST NOT POWER OFF, it might take several minutes!\n")
 
-	var cmds = [][]string{
+	cmds = [][]string{
 		{"stop", "optional"},
 		{"/etc/init.d/capwap stop", "optional"},
 		{"/etc/init.d/handle_cloud stop", "optional"},
