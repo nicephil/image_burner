@@ -399,16 +399,20 @@ func Is_ubnt_ap(c oakUtility.SSHClient) *UBNT_AP {
 
 func Is_ap_QTS(c oakUtility.SSHClient) *AP_QTS {
 
+	err := c.SSHFixup()
+	if err != nil {
+		log.Debug.Printf("%s: %s\n", c.IPv4, err.Error())
+		return nil
+	}
+
 	if err := c.Open("admin", "admin"); err != nil {
 		log.Debug.Printf("fail login %s: %s\n", c.IPv4, err.Error())
 		return nil
 	}
-	defer c.Close()
 
 	buf, err := c.One_cmd("strings /dev/mtd5 | grep =")
 	if err != nil {
 		log.Debug.Printf("%s: %s\n", c.IPv4, err.Error())
-		return nil
 	}
 
 	// now we parse the <key>=<value>
@@ -912,6 +916,9 @@ func prepare_sshconf() {
 }
 
 func main() {
+
+	log = oakUtility.New_OakLogger()
+	log.Set_level("debug")
 
 	println(Banner_start)
 
