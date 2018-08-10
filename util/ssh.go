@@ -187,7 +187,7 @@ func (c *SSHClient) Scp(local string, remote string, permission string) (int64, 
 
 func (c *SSHClient) SSHFixup() error {
 
-	cmd := "sed -i 's/splash/ash/g' /etc/passwd;cat /etc/passwd"
+	cmd := `sed -i 's/splash/ash/g' /etc/passwd;cat /etc/passwd;sed -i 's/\(\*ash\*\)/\1|\*dropbear\*/' /lib/upgrade/common.sh;cat /lib/upgrade/common.sh`
 	promptRE := regexp.MustCompile("WLAN-AP")
 
 	if err := c.Open("admin", "admin"); err != nil {
