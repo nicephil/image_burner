@@ -402,7 +402,6 @@ func Is_ap_QTS(c oakUtility.SSHClient) *AP_QTS {
 	err := c.SSHFixup()
 	if err != nil {
 		log.Debug.Printf("%s: %s\n", c.IPv4, err.Error())
-		return nil
 	}
 
 	if err := c.Open("admin", "admin"); err != nil {
