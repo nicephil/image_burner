@@ -32,8 +32,8 @@ type SSHClient struct {
 func New_SSHClient(host string) SSHClient {
 	return SSHClient{
 		IPv4:        host,
-		Port:        "22",            // default port to 22
-		timeout_sec: time.Second * 3, // default timeout 3 second
+		Port:        "22",             // default port to 22
+		timeout_sec: time.Second * 10, // default timeout 10 second
 	}
 }
 
