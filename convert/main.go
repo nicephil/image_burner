@@ -100,6 +100,28 @@ func (d *UBNT_AP) Get_latest_version() (version string) {
 	return
 }
 
+func (d *UBNT_AP) Get_erx_latest_version() (version string) {
+	version = ""
+	d.LatestFW = ""
+	url := "http://image.oakridge.vip:8000/images/ap/ubnterx/sysloader/latest-swversion.txt"
+	localfile := "latest-swversion-ubnt.txt"
+
+	if err := oakUtility.On_demand_download(localfile, url); err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
+
+	dat, err := ioutil.ReadFile(localfile)
+	if err != nil {
+		log.Error.Println(err.Error())
+		return
+	}
+	version = strings.TrimSpace(string(dat))
+
+	d.LatestFW = version
+	return
+}
+
 type Oakridge_Device struct {
 	Mac      string
 	HWmodel  string
@@ -271,6 +293,7 @@ func Is_ubnt_erx(c oakUtility.SSHClient) *UBNT_AP {
 		return nil
 	}
 	dev.IPv4 = c.IPv4
+	dev.LatestFW = dev.Get_erx_latest_version()
 	return &dev
 }
 
@@ -568,7 +591,8 @@ func install_ubnt_erx_img(host string) {
 	if err != nil {
 		panic(err)
 	}
-	pinger.SetStopAfter(5)
+	time.Sleep(30 * time.Second)
+	pinger.SetStopAfter(35)
 	pinger.OnRecv = func(pkt *ping.Packet) {
 		fmt.Printf("%d bytes from %s: icmp_seq=%d time=%v\n", pkt.Nbytes, pkt.IPAddr, pkt.Seq, pkt.Rtt)
 	}
@@ -580,7 +604,7 @@ func install_ubnt_erx_img(host string) {
 	defer p.Stop()
 	c := oakUtility.New_SSHClient(host) // ssh back to device again
 	for {
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 		err := c.Open("root", "oakridge")
 		if err == nil {
 			log.Debug.Printf("ssh connected to %s\n", host)

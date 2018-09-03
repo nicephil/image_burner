@@ -267,8 +267,8 @@ func ubnt_recover_img(host string, file string) error {
 	}
 	log.Debug.Printf("done untar %s:%s\n", host, "/tmp/"+file)
 	//last cmd expect return err
-	log.Debug.Printf("sysupgrade -n /tmp/recovery-ubnt-erx.tar")
-	c.One_cmd("sysupgrade -n /tmp/recovery-ubnt-erx.tar")
+	log.Debug.Printf("sysupgrade -n /tmp/recover-ubnt-erx.tar")
+	c.One_cmd("sysupgrade -n /tmp/recover-ubnt-erx.tar")
 	return nil
 }
 func restore_ubnt_erx(host string) {
@@ -293,7 +293,8 @@ func restore_ubnt_erx(host string) {
 	if err != nil {
 		panic(err)
 	}
-	pinger.SetStopAfter(5)
+	time.Sleep(20 * time.Second)
+	pinger.SetStopAfter(30)
 	pinger.OnRecv = func(pkt *ping.Packet) {
 		fmt.Printf("%d bytes from %s: icmp_seq=%d time=%v\n", pkt.Nbytes, pkt.IPAddr, pkt.Seq, pkt.Rtt)
 	}
@@ -305,7 +306,7 @@ func restore_ubnt_erx(host string) {
 	defer p.Stop()
 	c := oakUtility.New_SSHClient(host) // ssh back to device again
 	for {
-		time.Sleep(1 * time.Second)
+		time.Sleep(2 * time.Second)
 		err := c.Open("root", "oakridge")
 		if err == nil {
 			log.Debug.Printf("ssh connected to %s\n", host)
@@ -548,7 +549,7 @@ func scan_input_subnet(args []string) {
 
 func init() {
 	log = oakUtility.New_OakLogger()
-	log.Set_level("error")
+	log.Set_level("debug")
 }
 
 func main() {
