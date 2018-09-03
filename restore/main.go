@@ -549,7 +549,7 @@ func scan_input_subnet(args []string) {
 
 func init() {
 	log = oakUtility.New_OakLogger()
-	log.Set_level("debug")
+	log.Set_level("error")
 }
 
 func main() {

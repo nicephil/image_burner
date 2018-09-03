@@ -938,10 +938,12 @@ func prepare_sshconf() {
 	}
 }
 
-func main() {
-
+func init() {
 	log = oakUtility.New_OakLogger()
-	log.Set_level("debug")
+	log.Set_level("error")
+}
+
+func main() {
 
 	println(Banner_start)
 
