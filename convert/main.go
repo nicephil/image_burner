@@ -422,17 +422,12 @@ func Is_ubnt_ap(c oakUtility.SSHClient) *UBNT_AP {
 
 func Is_ap_QTS(c oakUtility.SSHClient) *AP_QTS {
 
-	err := c.SSHFixup()
-	if err != nil {
-		log.Debug.Printf("%s: %s\n", c.IPv4, err.Error())
-	}
-
-	if err := c.Open("admin", "admin"); err != nil {
+	if err := c.Open("root", "root"); err != nil {
 		log.Debug.Printf("fail login %s: %s\n", c.IPv4, err.Error())
 		return nil
 	}
 
-	buf, err := c.One_cmd("strings /dev/mtd5 | grep =")
+	buf, err := c.One_cmd("strings /dev/mtd6 | grep =")
 	if err != nil {
 		log.Debug.Printf("%s: %s\n", c.IPv4, err.Error())
 	}
@@ -465,6 +460,7 @@ func Is_ap_QTS(c oakUtility.SSHClient) *AP_QTS {
 			dev.Manufact_date = v
 		}
 	}
+	log.Debug.Printf("--> %s, %s, %s\n", dev.Devname, dev.Board_SN, dev.Mac)
 
 	switch dev.Devname {
 	case A820, A822, A920, W282:
@@ -515,7 +511,7 @@ func list_scan_result() {
 		for _, s := range n.qts_list {
 			cnt++
 			fmt.Printf("✓%-3d %s\n", cnt, s.OneLineSummary())
-			t := Target{host: s.IPv4, mac: s.Mac, user: "admin", pass: "admin", HWmodel: s.Devname, Name: s.OEM, LatestSW: s.LatestFW}
+			t := Target{host: s.IPv4, mac: s.Mac, user: "root", pass: "root", HWmodel: s.Devname, Name: s.OEM, LatestSW: s.LatestFW}
 			convert_targets = append(convert_targets, t)
 		}
 	}
@@ -940,7 +936,7 @@ func prepare_sshconf() {
 
 func init() {
 	log = oakUtility.New_OakLogger()
-	log.Set_level("error")
+	log.Set_level("debug")
 }
 
 func main() {
