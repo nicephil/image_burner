@@ -50,6 +50,7 @@ const (
 	A923         = "A923"
 	A820         = "A820"
 	A822         = "A822"
+	A826         = "A826"
 	W282         = "W282"
 	A920         = "A920"
 	WL8200_I2    = "WL8200-I2"
@@ -467,7 +468,7 @@ func Is_ap_QTS(c oakUtility.SSHClient) *AP_QTS {
 	}
 
 	switch dev.Devname {
-	case A820, A822, A920, W282:
+	case A820, A822, A826, A920, W282:
 		dev.OEM = "QTS_" + dev.Devname
 	case WL8200_I2:
 		dev.OEM = "DCN_" + dev.Devname
@@ -494,7 +495,7 @@ func list_scan_result() {
 				fmt.Printf("✓%-3d %s\n", cnt, o.OneLineSummary())
 
 				switch o.HWmodel {
-				case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923, A820, A822, W282, A920, WL8200_I2:
+				case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923, A820, A822, A826, W282, A920, WL8200_I2:
 					t := Target{host: o.IPv4, mac: o.Mac, user: "root", pass: "oakridge", HWmodel: o.HWmodel,
 						Name: o.HWname, SWver: o.Firmware, LatestSW: o.LatestFW} // we put together the target list, so later it can just be used directly
 					upgrade_targets = append(upgrade_targets, t)
@@ -640,7 +641,7 @@ func install_one_device(t Target, s *sync.WaitGroup) {
 		if err == nil {
 			record_converted_ap(t.mac)
 		}
-	case A820, A822, W282, A920, A923, WL8200_I2:
+	case A820, A822, A826, W282, A920, A923, WL8200_I2:
 		err := install_via_sysupgrade(t)
 		if err == nil {
 			record_converted_ap(t.mac)
@@ -656,6 +657,7 @@ func install_one_device(t Target, s *sync.WaitGroup) {
 var ap152_imgs = map[string][]string{
 	A820:      {"oakridge.a820.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
 	A822:      {"oakridge.a822.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A826:      {"oakridge.a826.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
 	W282:      {"oakridge.w282.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
 	A920:      {"oakridge.a920.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
 	A923:      {"oakridge.a923.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
@@ -996,7 +998,7 @@ func upgrade_one_device(t Target, s *sync.WaitGroup) {
 	}
 
 	switch t.HWmodel {
-	case AC_LITE, AC_LR, AC_PRO, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923, A820, A822, W282, A920, WL8200_I2:
+	case AC_LITE, AC_LR, AC_PRO, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923, A820, A822, A826, W282, A920, WL8200_I2:
 		switch t.HWmodel {
 		case AC_LITE_OLD:
 			t.HWmodel = AC_LITE
@@ -1025,6 +1027,7 @@ var ap_origin_imgs = map[string][]string{ //NOTE these 3 are use same img
 	A923:      {"a923.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
 	A820:      {"a820.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
 	A822:      {"a822.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
+	A826:      {"a826.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
 	W282:      {"w282.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
 	A920:      {"a920.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},
 	WL8200_I2: {"wl8200_i2.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/sysloader/latest-sysupgrade.bin.tar.gz"},

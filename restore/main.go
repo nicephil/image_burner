@@ -45,6 +45,7 @@ const UBNT_ERX_OLD = oakUtility.UBNT_ERX_OLD
 const A923 = "A923"
 const A820 = "A820"
 const A822 = "A822"
+const A826 = "A826"
 const W282 = "W282"
 const WL8200_I2 = "WL8200-I2"
 const A920 = "A920"
@@ -202,7 +203,7 @@ func list_scan_result() {
 		for _, o := range n.Oak_dev_list {
 			cnt++
 			switch o.Model {
-			case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923, A820, A822, W282, WL8200_I2, A920:
+			case AC_LITE, AC_LR, AC_PRO, UBNT_ERX, UBNT_ERX_OLD, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923, A820, A822, A826, W282, WL8200_I2, A920:
 				fmt.Printf("✓%-3d %s\n", cnt, o.OneLineSummary())
 				t := Target{host: o.IPv4, mac: o.Mac, Model: o.Model, Name: o.Name, SWver: o.Firmware} // we put together the target list, so later it can just be used directly
 				targets = append(targets, t)
@@ -355,7 +356,7 @@ func restore_one_device(t Target, s *sync.WaitGroup) {
 	}
 
 	switch t.Model {
-	case AC_LITE, AC_LR, AC_PRO, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923, A820, A822, W282, A920, WL8200_I2:
+	case AC_LITE, AC_LR, AC_PRO, AC_LITE_OLD, AC_LR_OLD, AC_PRO_OLD, A923, A820, A822, A826, W282, A920, WL8200_I2:
 		switch t.Model {
 		case AC_LITE_OLD:
 			t.Model = AC_LITE
@@ -380,6 +381,7 @@ var ap_origin_imgs = map[string][]string{ //NOTE these 3 are use same img
 	A923:      {"a923.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/A923/firmware.bin.tar.gz"},
 	A820:      {"a820.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/A820/firmware.bin.tar.gz"},
 	A822:      {"a822.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/A822/firmware.bin.tar.gz"},
+	A826:      {"a826.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/A826/firmware.bin.tar.gz"},
 	W282:      {"w282.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/W282/firmware.bin.tar.gz"},
 	A920:      {"a920.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/A920/firmware.bin.tar.gz"},
 	WL8200_I2: {"wl8200_i2.tar.gz", "http://image.oakridge.vip:8000/images/ap/ap152/origin/WL8200-I2/firmware.bin.tar.gz"},
